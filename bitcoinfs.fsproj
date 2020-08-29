@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <PackageReference Include="BouncyCastle" Version="1.8.6.1" />
+    <PackageReference Include="BouncyCastle.Crypto" Version="1.8.0-beta4" />
     <PackageReference Include="ExtCore" Version="0.8.46" />
     <PackageReference Include="FSharpx.Extras" Version="2.5.0" />
     <PackageReference Include="leveldb-sharp" Version="1.0.0" />

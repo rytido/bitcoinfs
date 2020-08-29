@@ -15,6 +15,9 @@ type Settings = {
     MaxGetblockRetry: int
     UseTor: bool
     UseSocks: bool
+    MaxPeers: int
+    PruneDepth: int
+    ReadTimeout: int
 }
 
 let settings = {
@@ -30,6 +33,9 @@ let settings = {
     MaxGetblockRetry = 3
     UseTor = true
     UseSocks = true
+    MaxPeers = 5
+    PruneDepth = 2000000
+    ReadTimeout = 30000
 }
 
 let logger1 s = Console.WriteLine("{0:s} {1}", DateTime.Now, s)

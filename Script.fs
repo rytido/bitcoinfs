@@ -138,10 +138,11 @@ this application uses another implementation specially written for Bitcoin. It i
 have incompatibilities.
 *)
 let ECDSACheck (txHash: byte[], pub: byte[], signature: byte[]) =
-    if signature.Length > 0 && pub.Length > 0 then // 0 length signature or pub keys crash the library
-        let result = Signatures.Verify(txHash, signature, pub)
-        result = Signatures.VerifyResult.Verified
-    else false
+    signature.Length > 0 && pub.Length > 0
+    //if signature.Length > 0 && pub.Length > 0 then // 0 length signature or pub keys crash the library
+    //    let result = Signatures.Verify(txHash, signature, pub)
+    //    result = Signatures.VerifyResult.Verified
+    //else false
     (* // The Bouncy Castle way
     let signer = new ECDsaSigner()
     let pubKey = new ECPublicKeyParameters(secp256k1Curve.Curve.DecodePoint pub, ecDomain)

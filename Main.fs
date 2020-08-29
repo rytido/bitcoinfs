@@ -30,6 +30,7 @@ open Blockchain
 open Wallet
 open Db
 open Script
+open Config
 
 (* The following stuff is for skipping validation during the import of a bootstrap file and for debugging purposes *)
 let skipScript (script: byte[]) =
@@ -62,7 +63,7 @@ let readBootstrapFast (firstBlock: int) (stream: Stream) =
     let mutable tip: byte[] = null
     while(stream.Position <> stream.Length) do
         if i % 10000 = 0 then
-            logger.InfoF "%d" i
+            logger1 i
         let magic = reader.ReadInt32()
         let length = reader.ReadInt32()
         let block = ParseByteArray (reader.ReadBytes(length)) Block.Parse
@@ -77,13 +78,13 @@ let readBootstrapFast (firstBlock: int) (stream: Stream) =
         Db.writeHeaders block.Header
         tip <- block.Header.Hash
         i <- i + 1
-    logger.InfoF "Last block %d" i
+    logger2 "Last block" i
     Db.writeTip tip
 
 let writeBootstrap (firstBlock: int) (lastBlock: int) (stream: Stream) =
     use writer = new BinaryWriter(stream)
     for i in firstBlock..lastBlock do
-        logger.InfoF "Writing block #%d" i
+        logger2 "Writing block #" i
         let bh = Db.getHeaderByHeight i
         let block = Db.loadBlock bh
         writer.Write(magic)
@@ -108,14 +109,14 @@ let readBootstrap (firstBlock: int) (stream: Stream) =
     let mutable i = firstBlock
     while(stream.Position <> stream.Length) do
         if i % 10000 = 0 then
-            logger.DebugF "%d" i
+            logger1 i
         let magic = reader.ReadInt32()
         let length = reader.ReadInt32()
         let block = ParseByteArray (reader.ReadBytes(length)) Block.Parse
         block.Header.Height <- i
         updateBlockUTXO utxoAccessor block |> ignore
         i <- i + 1
-    logger.DebugF "Last block %d" i
+    logger2 "Last block" i
 
 let readBootstrapTest() =
     // Import a couple of bootstrap dat files
@@ -154,7 +155,7 @@ The main function initializes the application and waits forever
 *)
 [<EntryPoint>]
 let main argv =
-    Config.BasicConfigurator.Configure() |> ignore
+    // Config.BasicConfigurator.Configure() |> ignore
 
     // Db.scanUTXO()
     runNode()

@@ -3,16 +3,16 @@
 
 This file is part of F# Bitcoin.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files 
-(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, 
-copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *)
 
@@ -41,7 +41,7 @@ open Script
 let secp256k1Curve = Org.BouncyCastle.Asn1.Sec.SecNamedCurves.GetByName("secp256k1")
 let ecDomain = new ECDomainParameters(secp256k1Curve.Curve, secp256k1Curve.G, secp256k1Curve.N)
 
-    
+
 let createBigInt (bytes: byte[]) = new Org.BouncyCastle.Math.BigInteger(1, bytes)
 
 (**
@@ -51,7 +51,7 @@ is human readable but not as efficient for storing and comparison.
 *)
 let base58alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 let fromBase58 (base58: string) =
-    let bi = 
+    let bi =
         base58.ToCharArray()
             |> Seq.fold (fun acc digit ->
                 acc * 58I + bigint (base58alphabet.IndexOf(digit))
@@ -119,9 +119,9 @@ let hmacOf(chain: byte[])(fnChain: unit -> byte[]) =
 exception BIP32Exception
 
 type BIP32PrivKeyExt(secret: Org.BouncyCastle.Math.BigInteger, chain: byte[]) =
-    let toPub() = 
+    let toPub() =
         let p = ecDomain.G.Multiply(secret)
-        new FpPoint(ecDomain.Curve, p.X, p.Y, true)
+        FpPoint(ecDomain.Curve, p.XCoord, p.YCoord, true)
 
     let toPrivChild index =
         let (l, r) =
@@ -156,7 +156,7 @@ and BIP32PublicExt(point: ECPoint, chain: byte[]) =
                 ms.ToArray()
             )
         let childPoint = ecDomain.G.Multiply(createBigInt(l)).Add(point)
-        new BIP32PublicExt(FpPoint(ecDomain.Curve, childPoint.X, childPoint.Y, true), r)
+        new BIP32PublicExt(FpPoint(ecDomain.Curve, childPoint.XCoord, childPoint.YCoord, true), r)
 
     override x.ToString() = sprintf "(%s,%s)" (point.GetEncoded() |> Hex.ToHexString) (chain |> Hex.ToHexString)
     member x.ToPublic() = point
@@ -181,9 +181,9 @@ type Electrum(mpub: byte[], group: int) =
         writer.Write(mpub)
         ms.ToArray() |> dsha |> createBigInt
     let masterPoint = ecDomain.Curve.CreatePoint(createBigInt(mpub.[0..31]), createBigInt(mpub.[32..]), true)
-    
+
     member x.Derive(index: int) = ecDomain.G.Multiply(deriveExp index).Add(masterPoint)
-        
+
 (**
 ## [Armory][4] Wallet
 
@@ -193,9 +193,9 @@ Armory style deterministic wallets. It requires the public master key and the ch
 type Armory(chain: byte[]) =
     let derive (pkey: byte[]) =
         let point = ecDomain.Curve.DecodePoint pkey
-        let pkeyUnc = new FpPoint(ecDomain.Curve, point.X, point.Y, false)
+        let pkeyUnc = FpPoint(ecDomain.Curve, point.XCoord, point.YCoord, false)
         let chainMod = dsha (pkeyUnc.GetEncoded())
-        let chain2 = 
+        let chain2 =
             Array.map2 (fun a b -> a ^^^ b)
                 chain chainMod
         let exp = createBigInt chain2
@@ -204,30 +204,30 @@ type Armory(chain: byte[]) =
     member x.Derive pk = derive pk
 
 (*** hide ***)
-let electrumHashes (mpk: byte[]) (cReceive: int) (cChange: int) = 
+let electrumHashes (mpk: byte[]) (cReceive: int) (cChange: int) =
     let electrumReceive = new Electrum(mpk, 0)
     let electrumChange = new Electrum(mpk, 1)
-    let derive (electrumWallet: Electrum) (c: int) = 
+    let derive (electrumWallet: Electrum) (c: int) =
         seq {
             for i in 0..c-1 do
-            let pubKey = electrumWallet.Derive(i).GetEncoded() 
+            let pubKey = electrumWallet.Derive(i).GetEncoded()
             yield pubKey |> hash160
         }
     [derive electrumReceive cReceive; derive electrumChange cChange] |> Seq.concat
 
-let armoryHashes (mpk: byte[]) (c: int) = 
+let armoryHashes (mpk: byte[]) (c: int) =
     let armory = new Armory(mpk.[33..])
-    let addresses = 
+    let addresses =
         Protocol.iterate (fun (pk: byte[]) ->
             (armory.Derive pk).GetEncoded()
         ) mpk.[0..32] |> Seq.map hash160
 
     addresses |> Seq.skip 1 |> Seq.take c
 
-let bip32Hashes (mpk: byte[]) (chain: byte[]) (isReceived: bool) (c: int) = 
+let bip32Hashes (mpk: byte[]) (chain: byte[]) (isReceived: bool) (c: int) =
     let publicKeyExt = (new BIP32PublicExt(ecDomain.Curve.DecodePoint(mpk), chain)).ToPublicChild(if isReceived then 0 else 1)
 
-    seq { 
+    seq {
         for i in 0..c-1 do
             yield publicKeyExt.ToPublicChild(i).ToPublic().GetEncoded() |> hash160
         }

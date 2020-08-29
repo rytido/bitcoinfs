@@ -34,26 +34,13 @@ module Checks
 
 (*** hide ***)
 open System
-open System.Collections.Generic
 open System.Linq
-open System.IO
-open System.Text
-open System.Reactive
-open System.Reactive.Linq
-open System.Reactive.Disposables
-open System.Threading.Tasks
 // open FSharp.Control.Observable
 open FSharpx
 open FSharpx.Collections
-open FSharpx.Choice
-open FSharpx.Validation
-open FSharpx.Option
-open ExtCore.Control
-open Org.BouncyCastle.Utilities.Encoders
 open NodaTime
 open MoreLinq
 open Protocol
-open Tracker
 open Db
 open Peer
 open Mempool
@@ -209,7 +196,7 @@ let checkBlockTxs (utxoAccessor: IUTXOAccessor) (block: Block) =
         let coinBaseScriptlen = block.Txs.[0].TxIns.[0].Script.Length
         do! (coinBaseScriptlen >= 2 && coinBaseScriptlen <= 100) |> errorIfFalse "coinbase script must be between 2 and 100 bytes"
 
-        let scriptRuntime = new Script.ScriptRuntime(fun a _ -> a)
+        let scriptRuntime = Script.ScriptRuntime(fun a _ -> a)
         let checkSigOpsCount =
             block.Txs |> Seq.mapi (fun i tx ->
                 let inputScripts =

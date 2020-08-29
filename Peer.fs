@@ -117,7 +117,7 @@ type PeerQueues (stream: NetworkStream, target: IPEndPoint) =
 
     interface IDisposable with
         override x.Dispose() =
-            logger.InfoF "Closing stream %A" target
+            sprintf "Closing stream %A" target |> logger1
             stream.Dispose()
             disposed <- true
 
@@ -394,7 +394,7 @@ there isn't much chance of making progress later.
             stream.Write(messageBytes, 0, messageBytes.Length)
         with
         | e ->
-            logger.DebugF "Cannot send message to peer"
+            logger1 "Cannot send message to peer"
             closePeer()
 
 (**
@@ -408,7 +408,7 @@ Applies the bloom filter to the outgoing message
                     bloomFilter |> Option.map (fun bf ->
                         let tx = message.ParsePayload() :?> Tx
                         let txMatch = checkTxAgainstBloomFilter bf bloomFilterUpdateMode tx
-                        if txMatch then logger.DebugF "Filtered TX %s" (hashToHex tx.Hash)
+                        if txMatch then logger2 "Filtered TX" (hashToHex tx.Hash)
                         txMatch
                     ) |?| true
                 if emit then [message] else []
@@ -417,7 +417,7 @@ Applies the bloom filter to the outgoing message
                         let block = message.ParsePayload() :?> Block
                         let (txs, merkleBlock) = buildMerkleBlock bf bloomFilterUpdateMode block
                         let txMessages = txs |> List.map(fun tx -> new BitcoinMessage("tx", tx.ToByteArray()))
-                        txs |> Seq.iter (fun tx -> logger.DebugF "Filtered TX %s" (hashToHex tx.Hash))
+                        txs |> Seq.iter (fun tx -> logger2 "Filtered TX" (hashToHex tx.Hash))
                         txMessages @ [new BitcoinMessage("merkleblock", merkleBlock.ToByteArray())]
                     ) |?| [message]
             | _ -> [message]
@@ -438,7 +438,7 @@ and routes it to the appropriate queue.
             (peerQueues :> IPeerSend).Receive(message)
         | "getaddr" ->
             let now = Instant.FromDateTimeUtc(DateTime.UtcNow)
-            let addr = new Addr([|{ Timestamp = int32(now.Ticks / NodaConstants.TicksPerSecond); Address = NetworkAddr.MyAddress }|])
+            let addr = new Addr([|{ Timestamp = int32(now.ToUnixTimeTicks() / NodaConstants.TicksPerSecond); Address = NetworkAddr.MyAddress }|])
             (peerQueues :> IPeerSend).Send(new BitcoinMessage("addr", addr.ToByteArray()))
         | "getdata" ->
             let gd = message.ParsePayload() :?> GetData
@@ -465,7 +465,7 @@ and routes it to the appropriate queue.
             elif inv.Invs.Length > 1 || inv.Invs.[0].Type <> blockInvType then // many invs or not a block inv
                 mempoolIncoming.OnNext(Inv(inv, self)) // send to mempool
             elif inv.Invs.Length = 1 && inv.Invs.[0].Type = blockInvType then // a block inv, send to blockchain
-                logger.DebugF "Catchup requested by %d %A %s" id self (hashToHex inv.Invs.[0].Hash)
+                sprintf "Catchup requested by %d %A %s" id self (hashToHex inv.Invs.[0].Hash) |> ignore
                 blockchainIncoming.OnNext(Catchup(self, inv.Invs.[0].Hash))
         | "tx" ->
             let tx = message.ParsePayload() :?> Tx
@@ -498,7 +498,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
         match command with
         | Open (t, tip) -> // Got a outgoing connection request
             target <- t
-            logger.DebugF "Connect to %s" (target.ToString())
+            logger2 "Connect to" (target.ToString())
             let client = new Sockets.TcpClient()
             let connect =
                 async {
@@ -510,13 +510,13 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             Observable.Timeout(Async.AsObservable connect, connectTimeout).Subscribe(
                 onNext = (fun c -> incoming.Trigger c), // If connected, grab the stream
                 onError = (fun ex ->
-                    logger.DebugF "Connect failed> %A %s" t (ex.ToString())
+                    sprintf "Connect failed> %A %s" t (ex.ToString()) |> logger1
                     (client :> IDisposable).Dispose()
                     closePeer())
             ) |> ignore
             data
         | OpenStream (stream, t, tip) -> // Got a stream from a successful connection (in or out)
-            logger.DebugF "OpenStream %A" t
+            logger2 "OpenStream" t
             target <- t
             stream.ReadTimeout <- settings.ReadTimeout
             stream.WriteTimeout <- int(commandTimeout.Ticks / TimeSpan.TicksPerMillisecond)
@@ -539,7 +539,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             let handshakeObs =
                 peerQueues.From
                     .Scan((false, false), fun (versionReceived: bool, verackReceived: bool) (m: BitcoinMessage) ->
-                    logger.DebugF "HS> %A" m
+                    sprintf "HS> %A" m |> logger1
                     match m.Command with
                     | "version" ->
                         let version = m.ParsePayload() :?> Version
@@ -556,10 +556,10 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             // Give that observable a certain time to finish
             Observable.Timeout(handshakeObs, handshakeTimeout).Subscribe(
                 onNext = (fun c ->
-                    logger.DebugF "%A Handshaked" t
+                    sprintf "%A Handshaked" t |> logger1
                     incoming.Trigger c),
                 onError = (fun ex ->
-                    logger.DebugF "Handshake failed> %A %s" target (ex.ToString())
+                    sprintf "Handshake failed> %A %s" target (ex.ToString()) |> logger1
                     closePeer())
             ) |> ignore
 
@@ -572,15 +572,15 @@ Every handler needs to support `Closing` because it may happen at any time. The 
 
             // Finally subscribe and start consuming the responses from the remote side
             // Any exception closes the peer
-            logger.DebugF "Before Subscription"
+            logger1 "Before Subscription"
             disposable.Add(
                 parser.BitcoinMessages.Subscribe(
                     onNext = (fun m -> processMessage peerQueues m),
                     onCompleted = (fun () -> closePeer()),
                     onError = (fun e ->
-                        logger.DebugF "Exception %A" e
+                        sprintf "Exception %A" e |> logger1
                         closePeer())))
-            logger.DebugF "Subscription made"
+            logger1 "Subscription made"
 
             { data with Queues = Some(peerQueues) }
         | Handshaked ->
@@ -589,13 +589,13 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             trackerIncoming.OnNext (TrackerCommand.SetVersion (id, versionMessage.Value))
             { data with State = Connected; CommandHandler = processCommand }
         | PeerCommand.Close ->
-            logger.DebugF "Closing %A" target
+            logger2 "Closing" target
             // Tell the Tracker that the peer is finished but don't leave yet. Tom will do the paperwork and
             // give the severance package
             trackerIncoming.OnNext(TrackerCommand.Close id)
             { data with CommandHandler = processClosing }
         | _ ->
-            logger.DebugF "Ignoring %A because the peer is not connected" command
+            sprintf "Ignoring %A because the peer is not connected" command |> logger1
             data
 (**
 `processCommand` is the handler for normal state. The request can be either
@@ -643,7 +643,7 @@ an observable. The peer creates the observable and notifies Bob of its availabil
             if newData.Score <= 0 then incoming.Trigger(PeerCommand.Close)
             newData
         | PeerCommand.Close ->
-            logger.DebugF "Closing %A" target
+            logger2 "Closing" target
             trackerIncoming.OnNext(TrackerCommand.Close id)
             { data with CommandHandler = processClosing }
 (**
@@ -707,7 +707,7 @@ let bootstrapPeers() =
 
         let! entry = Async.AwaitTask(Dns.GetHostEntryAsync("seed.bitnodes.io"))
         for peer in entry.AddressList do
-            let addr = { Timestamp = int (now.Ticks / NodaConstants.TicksPerSecond); Address = new NetworkAddr(new IPEndPoint(peer.MapToIPv4(), defaultPort)) }
+            let addr = { Timestamp = int (now.ToUnixTimeTicks() / NodaConstants.TicksPerSecond); Address = new NetworkAddr(new IPEndPoint(peer.MapToIPv4(), defaultPort)) }
             Db.updateAddr addr
         } |> Async.StartImmediate
 
