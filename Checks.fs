@@ -57,6 +57,7 @@ open Tracker
 open Db
 open Peer
 open Mempool
+open Config
 
 type BlockHeaderList = BlockHeader list // Sequence of block headers from oldest to most recent
 type BlockChainFragment = BlockHeader list // List of block headers from most recent to oldest
@@ -148,7 +149,7 @@ let checkTimestamp (header: BlockHeader) =
         let prevBlockTimestamps = chainFromTip header |> Seq.skip 1 |> Seq.truncate minTimestampBlocks |> Seq.toArray |> Array.sortBy (fun h -> h.Timestamp)
         let median = prevBlockTimestamps.[prevBlockTimestamps.Length / 2]
         do! (prevBlockTimestamps.Length < minTimestampBlocks || header.Timestamp > median.Timestamp) |> errorIfFalse "timestamp is too far back"
-        do! Instant.FromDateTimeUtc(DateTime.UtcNow.AddHours 2.0) >= Instant.FromSecondsSinceUnixEpoch(int64 header.Timestamp) |> errorIfFalse "timestamp is too far ahead"
+        do! Instant.FromDateTimeUtc(DateTime.UtcNow.AddHours 2.0) >= Instant.FromUnixTimeSeconds(int64 header.Timestamp) |> errorIfFalse "timestamp is too far ahead"
     }
 
 let between x min max = if x < min then min elif x > max then max else x
@@ -176,7 +177,7 @@ let checkBits (header: BlockHeader) =
 Check that the content of the blockheader is valid
 *)
 let checkBlockHeader (header: BlockHeader) =
-    logger.InfoF "Checking block header #%d" (header.Height)
+    logger2 "Checking block header #" (header.Height)
     let hashInt = header.Hash |> fun x -> bigint (Array.append x [|0uy|]) // append 0 to make sure the result is > 0
     maybe {
         let t = target header.Bits
@@ -198,7 +199,7 @@ the database or require script evaluation.
 *)
 let checkBlockTxs (utxoAccessor: IUTXOAccessor) (block: Block) =
     let bh = block.Header
-    logger.InfoF "Checking block tx #%d %A" (bh.Height) (bh)
+    sprintf "Checking block tx #%d %A" (bh.Height) (bh) |> logger1
     maybe {
         // checkdup
         do! block.Txs.Any() |> errorIfFalse "Must have at least one transaction"
@@ -230,7 +231,7 @@ let checkBlockTxs (utxoAccessor: IUTXOAccessor) (block: Block) =
                     |> Seq.map (fun script -> scriptRuntime.CheckSigCount script)
                     |> Seq.sum
             ) |> Seq.sum
-        logger.DebugF "CheckSig count %d" checkSigOpsCount
+        logger2 "CheckSig count" checkSigOpsCount
         do! checkSigOpsCount <= maxCheckSigOpsCount |> errorIfFalse (sprintf "checkSig ops cannot occur more than %d times" maxCheckSigOpsCount)
         let merkleRoot = block.Txs |> Array.map (fun tx -> tx.Hash) |> computeMerkleRoot
         do! block.Header.MerkleRoot = merkleRoot |> errorIfFalse "merkle root does not match with header"
@@ -242,7 +243,7 @@ I must use a temporary UTXO accessor for this because if any transaction of the 
 block is rejected and all the modification of the UTXO set must be rolled back.
 *)
 let updateBlockUTXO (utxoAccessor: IUTXOAccessor) (block: Block) =
-    logger.InfoF "Processing block #%d" block.Header.Height
+    logger2 "Processing block #%d" block.Header.Height
     use undoWriter = storeUndoBlock block
 
     maybe {

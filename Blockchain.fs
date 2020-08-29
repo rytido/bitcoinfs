@@ -88,6 +88,7 @@ open Db
 open Peer
 open Checks
 open Mempool
+open Config
 
 let disposable = new CompositeDisposable()
 let mutable tip = Db.readHeader (Db.readTip())
@@ -108,7 +109,7 @@ let calculateChainHeights(newHeaders: BlockHeaderList): BlockChainFragment optio
     let prevNewHeader = Db.readHeader hashOfPrevNewHeader
     if prevNewHeader.Hash = zeroHash
     then
-        logger.DebugF "Orphaned branch %A" newHeaders
+        sprintf "Orphaned branch %A" newHeaders |> logger1
         None
     else
         newHeaders |> Seq.iteri (fun i newHeader -> newHeader.Height <- prevNewHeader.Height + i + 1)
@@ -149,7 +150,7 @@ let rec asyncGetBlocks (headers: BlockHeader list) (attempsRemaining: int) =
     // If so, update the height and store it on file
     // Then remove it from the list of pending blocks
     let updatePendingBlocks (pendingBlocks: BlockMap) (block: Block, payload: byte[]) =
-        logger.DebugF "Block received -> %s" (hashToHex block.Header.Hash)
+        logger2 "Block received -> " (hashToHex block.Header.Hash)
         pendingBlocks.TryFind(block.Header.Hash) |> Option.iter(fun header ->
             block.Header.Height <- header.Height
             storeBlock block payload
@@ -174,13 +175,13 @@ let rec asyncGetBlocks (headers: BlockHeader list) (attempsRemaining: int) =
             )
             if not failedBlocks.IsEmpty then // Some blocks remaining, it was a failure
                 peer.Bad()
-                logger.DebugF "Failed blocks %A" (failedBlocks |> Map.values)
+                sprintf "Failed blocks %A" (failedBlocks |> Map.values) |> logger1
                 return! asyncGetBlocks (failedBlocks |> Map.valueList) (attempsRemaining-1) // Retry with 1 attempt fewer
             else
-                logger.DebugF "GetBlocks completed"
+                logger1 "GetBlocks completed"
                 return ()
         else
-            raise (new IOException "GetBlocks failed") // TODO: Delete block files
+            raise (IOException "GetBlocks failed") // TODO: Delete block files
     }
 
 let downloadBlocks (newChain: BlockChainFragment) =
@@ -247,7 +248,7 @@ let catchup (peer: IPeer) =
             let gh = new GetHeaders(blockchain |> Seq.truncate 10 |> Seq.map(fun bh -> bh.Hash) |> Seq.toList, Array.zeroCreate 32) // Prepare GetHeaders request
             let! headers = Async.AwaitTask(Tracker.getHeaders(gh, peer)) // Send request - park until request is processed
             let! getHeadersResult = Async.AwaitTask(headers.FirstOrDefaultAsync().ToTask()) // Pick Headers or exception
-            logger.DebugF "GetHeaders Results> %A %A" (peer.Target) (getHeadersResult)
+            sprintf "GetHeaders Results> %A %A" (peer.Target) (getHeadersResult) |> logger1
             return getHeadersResult
         }
 
@@ -283,7 +284,7 @@ let catchup (peer: IPeer) =
                                     bh
                             let validNewBlockchain = newBlockchain |> List.skipWhile(fun bh -> bh.Hash <> lastValidBlock.Hash)
                             if isBetter mainChain validNewBlockchain then
-                                logger.InfoF "New chain is better %A" headers
+                                sprintf "New chain is better %A" headers |> logger1
                                 tempUTXO.Commit()
                                 lca.NextHash <- newBlockchain.Last().Hash // Attach to LCA
                                 Db.writeHeaders lca
@@ -293,13 +294,13 @@ let catchup (peer: IPeer) =
                                 Db.writeTip tip.Hash
                                 mempoolIncoming.OnNext(Revalidate (tip.Height, (undoTxs |> List.rev)))
                                 let invBlock = InvVector([InvEntry(blockInvType, tip.Hash)])
-                                broadcastToPeers.OnNext(new BitcoinMessage("inv", invBlock.ToByteArray()))
+                                broadcastToPeers.OnNext(BitcoinMessage("inv", invBlock.ToByteArray()))
                                 trackerIncoming.OnNext(SetTip tip)
                                 catchupImpl()
                         )
                 )
             with
-            | ex -> logger.DebugF "%A" ex
+            | ex -> ex.ToString() |> logger1
 
     catchupImpl()
 
@@ -329,11 +330,11 @@ finished with catchup.
 let processCommand command =
     match command with
     | Catchup (peer, hash) ->
-        logger.DebugF "Catchup started for peer %A" peer
+        sprintf "Catchup started for peer %A" peer |> logger1
         let blockchain = fnBlockchain()
         if hash = null || (Db.readHeader hash).Hash = zeroHash || not (hasBlock (Db.readHeader hash)) then
             catchup peer
-        logger.DebugF "Catchup completed for peer %A" peer
+        sprintf "Catchup completed for peer %A" peer |> logger1
     | DownloadBlocks (invs, peer) ->
         let downloadResults =
             invs |> List.map (fun inv ->
@@ -348,18 +349,18 @@ let processCommand command =
     | GetHeaders (gh, peer) ->
         try
             let reqBlockchain = getBlockchainUpTo gh.Hashes gh.HashStop 2000
-            logger.DebugF "Headers sent> %A" reqBlockchain
+            sprintf "Headers sent> %A" reqBlockchain |> logger1
             let headers = new Headers(reqBlockchain)
             peer.Send(new BitcoinMessage("headers", headers.ToByteArray()))
         with
-            | e -> logger.DebugF "Exception %A" e
+            | e -> sprintf "Exception %A" e |> logger1
     | GetBlocks (gb, peer) ->
         try
             let reqBlockchain = getBlockchainUpTo gb.Hashes gb.HashStop 500
             let inv = new InvVector(reqBlockchain |> List.map (fun bh -> InvEntry(blockInvType, bh.Hash)))
             peer.Send(new BitcoinMessage("inv", inv.ToByteArray()))
         with
-            | e -> logger.DebugF "Exception %A" e
+            | e -> sprintf "Exception %A" e |> logger1
     | Ping (ping, peer) ->
         let pong = new Pong(ping.Nonce)
         peer.Send(new BitcoinMessage("pong", pong.ToByteArray()))

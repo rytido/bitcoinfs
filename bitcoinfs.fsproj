@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Config.fs" />
     <Compile Include="Protocol.fs" />
     <Compile Include="Db.fs" />
     <Compile Include="Peer.fs" />
@@ -29,6 +30,7 @@
     <PackageReference Include="NodaTime" Version="3.0.0" />
     <PackageReference Include="Secp256k1.Net" Version="0.1.55" />
     <PackageReference Include="System.Reactive" Version="4.4.1" />
+    <PackageReference Include="Wiry.Base32.Patched" Version="1.0.6.1" />
   </ItemGroup>
 
 </Project>

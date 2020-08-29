@@ -9,8 +9,8 @@ open System.IO
 open System.Net
 open System.Threading
 open System.Collections.Generic
-open System.Data.Linq
-open System.Data.SQLite
+//open System.Data.Linq
+//open System.Data.SQLite
 open System.Linq
 open System.Reactive
 open System.Reactive.Linq

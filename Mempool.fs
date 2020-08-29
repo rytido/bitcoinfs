@@ -3,23 +3,23 @@
 
 This file is part of F# Bitcoin.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files 
-(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, 
-copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *)
 
-(** 
-# The Memory Pool 
+(**
+# The Memory Pool
 
-Where unconfirmed transactions go 
+Where unconfirmed transactions go
 *)
 module Mempool
 
@@ -37,6 +37,7 @@ open Protocol
 open Db
 open Peer
 open Tracker
+open Config
 
 let mutable listTx = new List<byte[]>()
 let mutable mempool = new Dictionary<byte[], Tx>(new HashCompare())
@@ -68,34 +69,34 @@ type MempoolUTXOAccessor(baseUTXO: IUTXOAccessor) =
     let table = new Dictionary<OutPoint, UTXO>(new OutpointCompare())
     // With LevelDB, I had iterators. A dictionary does not have a sorted iterator so I need to keep track
     // of the counts separately
-    let counts = new Dictionary<byte[], int>(new HashCompare()) 
+    let counts = new Dictionary<byte[], int>(new HashCompare())
 
-    let getOrDefault (hash: byte[]) = 
+    let getOrDefault (hash: byte[]) =
         let (f, count) = counts.TryGetValue(hash) // I wish there was a GetOrDefault instead of a TryGetValue
         if f then count else 0
-    let deleteUTXO (outpoint: OutPoint) = 
+    let deleteUTXO (outpoint: OutPoint) =
         table.[outpoint] <- null
         let count = getOrDefault outpoint.Hash
         counts.[outpoint.Hash] <- count-1
-    let addUTXO (outpoint: OutPoint) (utxo: UTXO) = 
+    let addUTXO (outpoint: OutPoint) (utxo: UTXO) =
         table.[outpoint] <- utxo
         let count = getOrDefault outpoint.Hash
         counts.[outpoint.Hash] <- count+1
-        
+
     let getUTXO (outpoint: OutPoint) =
         let (f, utxo) = table.TryGetValue(outpoint)
         if f
-        then 
-            if utxo <> null 
+        then
+            if utxo <> null
             then Some(utxo)
-            else 
-                logger.DebugF "Cannot find outpoint %A" outpoint
+            else
+                sprintf "Cannot find outpoint %A" outpoint |> logger1
                 None
         else
             baseUTXO.GetUTXO outpoint
     let getCount (txHash: byte[]) =
         let (f, count) = counts.TryGetValue(txHash)
-        if f 
+        if f
         then count + baseUTXO.GetCount(txHash)
         else baseUTXO.GetCount(txHash)
 
@@ -103,7 +104,7 @@ type MempoolUTXOAccessor(baseUTXO: IUTXOAccessor) =
         table |> Seq.iter(fun kv ->
             let outpoint = kv.Key
             let utxo = kv.Value
-            if utxo <> null 
+            if utxo <> null
             then baseUTXO.AddUTXO(outpoint, utxo)
             else baseUTXO.DeleteUTXO(outpoint)
         )
@@ -120,7 +121,7 @@ type MempoolUTXOAccessor(baseUTXO: IUTXOAccessor) =
         member x.GetCount(txHash) = getCount txHash
         member x.Dispose() = table.Clear()
 
-(** 
+(**
 The memory pool receives transactions from the all the connected nodes. Many of them turn out to be invalid, most of the time
 because the output is already spent (double-spend). Sometimes though, the signatures are invalid altogether. In any case,
 it's important to check the transactions before they are accepted into the pool. When the application receives a new block,
@@ -128,16 +129,16 @@ the memory pool gets revalidated and every invalid transaction gets booted out. 
 the transactions in the block and the same one from the pool.
 *)
 let txHash = hashFromHex "d4c7e1458bc7d7c54e90cc95117afd95a7498931cc2aa11e18ab0c52fc4cc512"
-let checkScript (utxoAccessor: IUTXOAccessor) (tx: Tx): Option<unit> = 
-    let x = 
-        tx.TxIns 
+let checkScript (utxoAccessor: IUTXOAccessor) (tx: Tx): Option<unit> =
+    let x =
+        tx.TxIns
             |> Seq.mapi (fun i txIn ->
                 let scriptEval = new Script.ScriptRuntime(Script.computeTxHash tx i)
                 let outpoint = txIn.PrevOutPoint
                 let utxo = utxoAccessor.GetUTXO outpoint
                 utxo |> Option.map (fun utxo -> scriptEval.Verify(txIn.Script, utxo.TxOut.Script))
-                ) 
-            |> Seq.toList |> Option.sequence 
+                )
+            |> Seq.toList |> Option.sequence
             |> Option.map(fun x -> x.All(fun x -> x)) // tx succeeds if all scripts succeed
     (x.IsSome && x.Value) |> errorIfFalse "script failure"
 
@@ -161,29 +162,29 @@ Revalidate builds a new pool and then flips the old one with the new one.
 let revalidate () =
     mempoolAccessor.Clear()
     let newListTx = new List<byte[]>()
-    let newMempool = new Dictionary<byte[], Tx>(new HashCompare())
+    let newMempool = new Dictionary<byte[], Tx>(HashCompare())
     listTx <- listTx.Where(fun hash ->
         let tx = mempool.[hash]
         (validate tx).IsSome
         ).ToList()
     mempool <- listTx.Select(fun hash -> mempool.[hash]).ToDictionary(fun tx -> tx.Hash)
-    logger.InfoF "Mempool has %d transactions" mempool.Count
+    logger2 "Mempool transactions:" mempool.Count
 
-let addTx tx = 
+let addTx tx =
     try
         validate tx |> Option.iter(fun () ->
             listTx.Add(tx.Hash)
             mempool.Item(tx.Hash) <- tx
             broadcastToPeers.OnNext(new BitcoinMessage("tx", tx.ToByteArray()))
-            logger.DebugF "Unconfirmed TX -> %s" (hashToHex tx.Hash)
+            logger2 "Unconfirmed TX ->" (hashToHex tx.Hash)
             )
     with
     | ValidationException e -> ignore() // printfn "Invalid tx: %s" (hashToHex tx.Hash)
 
-(** 
+(**
 ## Message loop
 
-The main message loop picks up 
+The main message loop picks up
 
 - new `inv` messages. If the mempool doesn't have it, it will request for the tx data using `getdata`
 - `tx` data. It gets validated and then put into the pool
@@ -191,7 +192,7 @@ The main message loop picks up
 - `mempool`. The mempool message that triggers a full dump of the mempool as inv messages
 - revalidate
 *)
-let processCommand (command: MempoolCommand) = 
+let processCommand (command: MempoolCommand) =
     match command with
     | Revalidate (currentHeight, undoTxs) ->
         mempoolHeight <- currentHeight
@@ -201,7 +202,7 @@ let processCommand (command: MempoolCommand) =
                 mempool.Item(tx.Hash) <- tx
         revalidate()
     | Tx tx -> addTx tx
-    | Inv (invVector, peer) -> 
+    | Inv (invVector, peer) ->
         let newInvs = invVector.Invs |> List.filter(fun inv -> not (mempool.ContainsKey inv.Hash))
         newInvs |> List.iter (fun inv -> mempool.Add(inv.Hash, null))
         let gd = new GetData(newInvs)
@@ -212,9 +213,9 @@ let processCommand (command: MempoolCommand) =
             let (f, tx) = mempool.TryGetValue(inv.Hash)
             if f && tx <> null then
                 peer.Send(new BitcoinMessage("tx", tx.ToByteArray()))
-    | Mempool peer -> 
+    | Mempool peer ->
         let inv = mempool.Keys |> Seq.map (fun txHash -> InvEntry(txInvType, txHash)) |> Seq.toList
-        logger.DebugF "MemoryPool %A" inv
+        sprintf "MemoryPool %A" inv |> logger1
         if not inv.IsEmpty then
             let invVec = InvVector(inv)
             peer.Send(new BitcoinMessage("inv", invVec.ToByteArray()))

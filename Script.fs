@@ -64,6 +64,7 @@ open Org.BouncyCastle.Asn1
 open Secp256k1Net
 open Org.BouncyCastle.Crypto.Signers
 open Protocol
+open Config
 
 (**
 ##  Bitcoin Elliptic Curve secp256k1
@@ -431,7 +432,7 @@ It also removes any instance of OP_CODESEPARATOR
                 (true, script, dataList.ToArray())
             with
             | e ->
-                logger.DebugF "Invalid script %A" e
+                sprintf "Invalid script %A" e |> logger1
                 let currentPos = int ms.Position-1
                 (false, script.[0..currentPos], dataList.ToArray())
         )

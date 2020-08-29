@@ -3,16 +3,16 @@
 
 This file is part of F# Bitcoin.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files 
-(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, 
-copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *)
 
@@ -23,7 +23,7 @@ This is the first of the two modules that form the Peer-to-peer layer. It is als
 the network layer and the farthest from the business logic.
 
 A peer is our side of the communication channel with a remote node of the Bitcoin network. It is responsible for
-encoding/decoding and the transmission of messages with a single remote node. A peer is constructed 
+encoding/decoding and the transmission of messages with a single remote node. A peer is constructed
 with a unique id and bound to single node. If the other side is not responsive or disconnects, the peer gets evicted.
 The tracker Tom fires Peter. Even if Peter comes back with a response later, Tom will disregard it.
 
@@ -46,13 +46,14 @@ open System.Reactive.Concurrency
 open System.Reactive.Threading.Tasks
 open System.Threading
 open System.Threading.Tasks
-open FSharp.Control.Observable
+//open FSharp.Control.Observable
 open Org.BouncyCastle.Utilities.Encoders
 open FSharpx.Choice
 open FSharpx.Validation
 open NodaTime
 open Protocol
 open Db
+open Config
 
 let defaultPort = settings.ServerPort
 
@@ -80,10 +81,10 @@ type TrackerPeerState = Allocated | Ready | Busy |  Free
 (**
 Busy/Ready states control the allocation of resources. Tom does not know exactly how much work is done by Peter. Neither does he know
 the nature of the work. It is controlled by whoever requested the work, usually Bob. Tom's responsibility is limited to finding a peer for Bob after that,
-Peter and Bob talk directly. 
+Peter and Bob talk directly.
 
 The Busy and Ready state are present in both Tom and Peter. Because they are different actors, there is no guarantee
-that these states will be synchronized. If Tom marks Peter as busy and then sends a message to Peter, Peter is not busy yet since he hasn't 
+that these states will be synchronized. If Tom marks Peter as busy and then sends a message to Peter, Peter is not busy yet since he hasn't
 received the message yet. It is normal but when Peter finishes his work and becomes available again, the reverse must happen. He must set his
 state to ready before he notifies Tom otherwise Tom could send him work before he becomes ready. Essentially, because work comes from Tom, it is ok
 if Tom thinks that Peter is busy when he is not, but it is bad if Tom thinks Peter is available when he is not.
@@ -109,13 +110,13 @@ type IPeerSend =
     abstract Receive: BitcoinMessage -> unit
     abstract Send: BitcoinMessage -> unit
 
-type PeerQueues (stream: NetworkStream, target: IPEndPoint) = 
+type PeerQueues (stream: NetworkStream, target: IPEndPoint) =
     let fromPeer = new Event<BitcoinMessage>()
     let toPeer = new Event<BitcoinMessage>()
     let mutable disposed = false
 
     interface IDisposable with
-        override x.Dispose() = 
+        override x.Dispose() =
             logger.InfoF "Closing stream %A" target
             stream.Dispose()
             disposed <- true
@@ -139,10 +140,10 @@ type IPeer =
 (**
 ## Commands
 The communication queues have to be set up before they are used and their types must be provided.
-Because F# does not have forward declarations all the commands are listed here even if they are used only later. 
+Because F# does not have forward declarations all the commands are listed here even if they are used only later.
 *)
 // Commands that the Peer can receive
-and PeerCommand = 
+and PeerCommand =
     | Open of target: IPEndPoint * tip: BlockHeader
     | OpenStream of stream: NetworkStream * remote: IPEndPoint * tip: BlockHeader
     | Handshaked
@@ -157,7 +158,7 @@ and PeerCommand =
     | UpdateScore of score: int
 
 // Commands that the Tracker (Tom) can receive
-type TrackerCommand = 
+type TrackerCommand =
     | GetPeers
     | Connect of target: IPEndPoint
     | IncomingConnection of stream: NetworkStream * target: IPEndPoint
@@ -210,7 +211,7 @@ Fortunately, I had some code related to bloom filters in the wallet part that I 
 *)
 
 // A node in the partial merkle tree
-type PartialMerkleTreeNode = 
+type PartialMerkleTreeNode =
     {
     Hash: byte[]
     Include: bool // whether any descendant matches the filter
@@ -248,7 +249,7 @@ let checkTxAgainstBloomFilter (bloomFilter: BloomFilter) (updateMode: BloomFilte
                 | UpdateAll -> addOutpoint tx.Hash iTxOut // always add the outpoint
                 | UpdateP2PubKeyOnly -> // add the outpoint if it's a pay2Pub or pay2Multisig. It's ok to add more than necessarily because false
                     // positives are acceptable
-                    if Script.isPay2PubKey script || Script.isPay2MultiSig script then addOutpoint tx.Hash iTxOut 
+                    if Script.isPay2PubKey script || Script.isPay2MultiSig script then addOutpoint tx.Hash iTxOut
                 | UpdateNone -> ignore() // don't update
             matchTxOut
             ) |> Seq.exists id
@@ -267,17 +268,17 @@ let buildMerkleBlock (bloomFilter: BloomFilter) (updateMode: BloomFilterUpdate) 
     let rec makeTree (merkletreeNodes: PartialMerkleTreeNode list) = // Build the tree by merging level by level
         match merkletreeNodes with
         | [root] -> root // If single node, I am at the root
-        | _ -> 
+        | _ ->
             let len = merkletreeNodes.Length
             let nodes = // Make the level contain an even number of nodes
-                if len % 2 = 0 
+                if len % 2 = 0
                 then merkletreeNodes
                 else merkletreeNodes @ [merkletreeNodes.Last()] // duplicate the last node if uneven
             let parentNodes = // Merge nodes two by two
                 (nodes |> Seq.ofList).Batch(2) |> Seq.map (fun x ->
                     let [left; right] = x |> Seq.toList
                     let includeChildren = left.Include || right.Include
-                    { 
+                    {
                         Hash = dsha ([left.Hash; right.Hash] |> Array.concat) // DSHA on the concat of each hash
                         Include = includeChildren
                         Left = if includeChildren then Some(left) else None // Trim the branch if both children have no match
@@ -285,7 +286,7 @@ let buildMerkleBlock (bloomFilter: BloomFilter) (updateMode: BloomFilterUpdate) 
                     }
                 ) |> Seq.toList
             makeTree parentNodes
-            
+
     // Build the tree
     let merkleTree = makeTree merkletreeLeaves
 
@@ -295,7 +296,7 @@ let buildMerkleBlock (bloomFilter: BloomFilter) (updateMode: BloomFilterUpdate) 
 
     let rec depthFirstTraversal (node: PartialMerkleTreeNode) = // Traverse the tree down
         flags.Add(node.Include)
-        if node.Left = None && node.Right = None then 
+        if node.Left = None && node.Right = None then
             hashes.Add(node.Hash) // Write the contents of the leaves to the output buffers
         node.Left |> Option.iter depthFirstTraversal
         node.Right |> Option.iter depthFirstTraversal
@@ -309,8 +310,8 @@ let buildMerkleBlock (bloomFilter: BloomFilter) (updateMode: BloomFilterUpdate) 
 
 (**
 ## The Peer implementation
- 
-### The peer's internal state 
+
+### The peer's internal state
 
 The peer changes its command handler as it changes state. Though a common pattern in actor frameworks, I have
 to emulate it because RX is not an actor framework. When an actor receives a message, a handler processes it and modifies
@@ -326,9 +327,9 @@ type PeerData = {
     CommandHandler: PeerData -> PeerCommand -> PeerData
     }
 
-type Peer(id: int) as self = 
+type Peer(id: int) as self =
     let disposable = new CompositeDisposable()
-    
+
     let mutable target: IPEndPoint = null // For logging only
     let mutable versionMessage: Version option = None // For logging only
     let mutable bloomFilterUpdateMode = BloomFilterUpdate.UpdateNone
@@ -350,7 +351,7 @@ type Peer(id: int) as self =
 (** The workloop takes a network stream and continually grabs data from it and delivers them
 to the Observable.
 *)
-    let workLoop(stream: NetworkStream) = 
+    let workLoop(stream: NetworkStream) =
         let buffer: byte[] = Array.zeroCreate 1000000 // network buffer
         let task() = stream.AsyncRead(buffer) |> Async.AsObservable
         let hasData = ref true
@@ -359,7 +360,7 @@ to the Observable.
             .Do(fun c -> hasData := c > 0)
             .Where(fun c -> c > 0)
             .Select(fun c -> buffer.[0..c-1]) // Keep doing the same task until the stream closes
-        
+
 (** Helper functions to change the state of the peer. These functions work asynchronously and can be called from
 any thread.
 *)
@@ -375,9 +376,9 @@ any thread.
 (** Another helper function that sends a message out and return an empty observable. By having it as
 an observable, the sending is part of the time out.
 *)
-    let sendMessageObs (peerQueues: PeerQueues) (message: BitcoinMessage) = 
+    let sendMessageObs (peerQueues: PeerQueues) (message: BitcoinMessage) =
         Observable.Defer(
-            fun () -> 
+            fun () ->
                 (peerQueues :> IPeerSend).Send(message)
                 Observable.Empty()
             )
@@ -387,12 +388,12 @@ It could have closed. The network stream has a WriteTimeOut set and will throw a
 couldn't be sent during the allocated time. At this point, if an exception is raised I close the peer because
 there isn't much chance of making progress later.
 *)
-    let sendMessage (stream: NetworkStream) (message: BitcoinMessage) = 
+    let sendMessage (stream: NetworkStream) (message: BitcoinMessage) =
         let messageBytes = message.ToByteArray()
         try
             stream.Write(messageBytes, 0, messageBytes.Length)
         with
-        | e -> 
+        | e ->
             logger.DebugF "Cannot send message to peer"
             closePeer()
 
@@ -402,16 +403,16 @@ Applies the bloom filter to the outgoing message
     let filterMessage (message: BitcoinMessage): BitcoinMessage list =
         if relay = 1uy then
             match message.Command with
-            | "tx" -> 
-                let emit = 
+            | "tx" ->
+                let emit =
                     bloomFilter |> Option.map (fun bf ->
-                        let tx = message.ParsePayload() :?> Tx 
+                        let tx = message.ParsePayload() :?> Tx
                         let txMatch = checkTxAgainstBloomFilter bf bloomFilterUpdateMode tx
                         if txMatch then logger.DebugF "Filtered TX %s" (hashToHex tx.Hash)
                         txMatch
                     ) |?| true
                 if emit then [message] else []
-            | "block" -> 
+            | "block" ->
                 bloomFilter |> Option.map (fun bf ->
                         let block = message.ParsePayload() :?> Block
                         let (txs, merkleBlock) = buildMerkleBlock bf bloomFilterUpdateMode block
@@ -420,22 +421,22 @@ Applies the bloom filter to the outgoing message
                         txMessages @ [new BitcoinMessage("merkleblock", merkleBlock.ToByteArray())]
                     ) |?| [message]
             | _ -> [message]
-        else 
+        else
             match message.Command with
             | "tx" | "block" -> []
             | _ -> [message]
 
 (**
 `processMessage` handles messages incoming from the remote node. Generally speaking, it parses the payload of the message
-and routes it to the appropriate queue. 
+and routes it to the appropriate queue.
 *)
-    let processMessage (peerQueues: PeerQueues) (message: BitcoinMessage) = 
+    let processMessage (peerQueues: PeerQueues) (message: BitcoinMessage) =
         let command = message.Command
         match command with
-        | "version" 
+        | "version"
         | "verack" ->
             (peerQueues :> IPeerSend).Receive(message)
-        | "getaddr" -> 
+        | "getaddr" ->
             let now = Instant.FromDateTimeUtc(DateTime.UtcNow)
             let addr = new Addr([|{ Timestamp = int32(now.Ticks / NodaConstants.TicksPerSecond); Address = NetworkAddr.MyAddress }|])
             (peerQueues :> IPeerSend).Send(new BitcoinMessage("addr", addr.ToByteArray()))
@@ -449,7 +450,7 @@ and routes it to the appropriate queue.
         | "getblocks" ->
             let gb = message.ParsePayload() :?> GetBlocks
             blockchainIncoming.OnNext(GetBlocks (gb, peerQueues))
-        | "addr" -> 
+        | "addr" ->
             let addr = message.ParsePayload() :?> Addr
             addrTopic.OnNext(addr)
         | "headers" ->
@@ -484,7 +485,7 @@ and routes it to the appropriate queue.
             let bf = new BloomFilter(filterLoad.Filter, filterLoad.NHash, filterLoad.NTweak)
             bloomFilter <- Some(bf)
             relay <- 1uy
-        | "filterclear" -> 
+        | "filterclear" ->
             bloomFilter <- None
             relay <- 1uy
         | _ -> ignore()
@@ -493,13 +494,13 @@ and routes it to the appropriate queue.
 `processConnection` is the handler active during connection. It replies to `Open`, `OpenStream`, `Handshake` and `Closing`.
 Every handler needs to support `Closing` because it may happen at any time. The other messages are specific to the state of the peer.
 *)
-    let rec processConnection (data: PeerData) (command: PeerCommand): PeerData = 
+    let rec processConnection (data: PeerData) (command: PeerCommand): PeerData =
         match command with
         | Open (t, tip) -> // Got a outgoing connection request
             target <- t
             logger.DebugF "Connect to %s" (target.ToString())
             let client = new Sockets.TcpClient()
-            let connect = 
+            let connect =
                 async {
                     let! stream = Protocol.connect(target.Address) (target.Port)
                     return OpenStream (stream, target, tip)
@@ -508,7 +509,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             // Connect to the node and bail out if it fails or the timeout expires
             Observable.Timeout(Async.AsObservable connect, connectTimeout).Subscribe(
                 onNext = (fun c -> incoming.Trigger c), // If connected, grab the stream
-                onError = (fun ex -> 
+                onError = (fun ex ->
                     logger.DebugF "Connect failed> %A %s" t (ex.ToString())
                     (client :> IDisposable).Dispose()
                     closePeer())
@@ -535,12 +536,12 @@ Every handler needs to support `Closing` because it may happen at any time. The 
 
             // The handshake observable waits for the verack and the version response from the other side. When both parties have
             // exchanged their version/verack, it will deliver a single event "Handshaked"
-            let handshakeObs = 
+            let handshakeObs =
                 peerQueues.From
                     .Scan((false, false), fun (versionReceived: bool, verackReceived: bool) (m: BitcoinMessage) ->
                     logger.DebugF "HS> %A" m
                     match m.Command with
-                    | "version" -> 
+                    | "version" ->
                         let version = m.ParsePayload() :?> Version
                         versionMessage <- Some(version)
                         relay <- version.Relay
@@ -554,17 +555,17 @@ Every handler needs to support `Closing` because it may happen at any time. The 
 
             // Give that observable a certain time to finish
             Observable.Timeout(handshakeObs, handshakeTimeout).Subscribe(
-                onNext = (fun c -> 
+                onNext = (fun c ->
                     logger.DebugF "%A Handshaked" t
                     incoming.Trigger c),
-                onError = (fun ex -> 
+                onError = (fun ex ->
                     logger.DebugF "Handshake failed> %A %s" target (ex.ToString())
                     closePeer())
             ) |> ignore
 
-            (** Subscription have to be made *after* the listeners are set up otherwise messages can be lost. 
+            (** Subscription have to be made *after* the listeners are set up otherwise messages can be lost.
             For instance, I had a bug because the following `Subscribe` was made before `handshakeObs`.
-            In some cases an incoming connection would post a `version`. It would go to `processMessage` and 
+            In some cases an incoming connection would post a `version`. It would go to `processMessage` and
             be sent to the `peerQueues.From` observable. But since `handshakeObs` occurs later, there would
             be nothing to handle this message and it would be lost.
             *)
@@ -574,9 +575,9 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             logger.DebugF "Before Subscription"
             disposable.Add(
                 parser.BitcoinMessages.Subscribe(
-                    onNext = (fun m -> processMessage peerQueues m), 
+                    onNext = (fun m -> processMessage peerQueues m),
                     onCompleted = (fun () -> closePeer()),
-                    onError = (fun e -> 
+                    onError = (fun e ->
                         logger.DebugF "Exception %A" e
                         closePeer())))
             logger.DebugF "Subscription made"
@@ -587,13 +588,13 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             trackerIncoming.OnNext (TrackerCommand.SetReady id)
             trackerIncoming.OnNext (TrackerCommand.SetVersion (id, versionMessage.Value))
             { data with State = Connected; CommandHandler = processCommand }
-        | PeerCommand.Close -> 
+        | PeerCommand.Close ->
             logger.DebugF "Closing %A" target
-            // Tell the Tracker that the peer is finished but don't leave yet. Tom will do the paperwork and 
+            // Tell the Tracker that the peer is finished but don't leave yet. Tom will do the paperwork and
             // give the severance package
             trackerIncoming.OnNext(TrackerCommand.Close id)
             { data with CommandHandler = processClosing }
-        | _ -> 
+        | _ ->
             logger.DebugF "Ignoring %A because the peer is not connected" command
             data
 (**
@@ -605,15 +606,15 @@ an observable. The peer creates the observable and notifies Bob of its availabil
 - A request for the remote node like getdata. They come from the memory pool.
 - or some state management message
 *)
-    and processCommand (data: PeerData) (command: PeerCommand): PeerData = 
+    and processCommand (data: PeerData) (command: PeerCommand): PeerData =
         let peerQueues = data.Queues.Value
         match command with
-        | Execute message -> 
+        | Execute message ->
             (peerQueues :> IPeerSend).Send(message)
             data
         | PeerCommand.GetHeaders (gh, ts, _) ->
             let sendObs = sendMessageObs peerQueues (new BitcoinMessage("getheaders", gh.ToByteArray()))
-            let obs = 
+            let obs =
                 Observable
                     .Timeout(sendObs.Concat(headersIncoming), commandTimeout)
             ts.SetResult(obs)
@@ -622,37 +623,37 @@ an observable. The peer creates the observable and notifies Bob of its availabil
             let blocksPending = new HashSet<byte[]>(gd.Invs |> Seq.map(fun inv -> inv.Hash), new HashCompare())
             let sendObs = sendMessageObs peerQueues (new BitcoinMessage("getdata", gd.ToByteArray()))
             let count = blocksPending.Count
-            let obs = 
+            let obs =
                 Observable
                     .Timeout(sendObs.Concat(blockIncoming), commandTimeout)
                     .Where(fun (b, _) -> blocksPending.Contains b.Header.Hash)
                     .Take(count)
             ts.SetResult(self :> IPeer, obs)
             { data with State = PeerState.Busy }
-        | PeerCommand.SetReady -> 
+        | PeerCommand.SetReady ->
             if data.State <> PeerState.Ready then
                 trackerIncoming.OnNext (TrackerCommand.SetReady id)
             { data with State = PeerState.Ready }
-        | GetData (gd) -> 
+        | GetData (gd) ->
             let sendObs = sendMessageObs peerQueues (new BitcoinMessage("getdata", gd.ToByteArray()))
             Observable.Timeout(sendObs, commandTimeout).Subscribe(onNext = (fun _ -> ignore()), onError = (fun _ -> badPeer())) |> ignore
             data
-        | UpdateScore score -> 
+        | UpdateScore score ->
             let newData = { data with Score = data.Score + score }
             if newData.Score <= 0 then incoming.Trigger(PeerCommand.Close)
             newData
-        | PeerCommand.Close -> 
+        | PeerCommand.Close ->
             logger.DebugF "Closing %A" target
             trackerIncoming.OnNext(TrackerCommand.Close id)
             { data with CommandHandler = processClosing }
 (**
-Finally, `processClosing` handles the cleanup. Tom will not send further requests to this peer but there still may be 
-outstanding message in the pipeline. They must be cleared gracefully otherwise someone could end up waiting for their 
+Finally, `processClosing` handles the cleanup. Tom will not send further requests to this peer but there still may be
+outstanding message in the pipeline. They must be cleared gracefully otherwise someone could end up waiting for their
 result forever.
 *)
     and processClosing (data: PeerData) (command: PeerCommand): PeerData =
         match command with
-        | Closed -> 
+        | Closed ->
             (self :> IDisposable).Dispose() // Dispose completes the queues
             { data with State = PeerState.Closed; Queues = None; CommandHandler = processConnection }
         | PeerCommand.GetHeaders (gh, ts, _) ->
@@ -664,7 +665,7 @@ result forever.
         | _ -> data
 
     let initialState = { State = PeerState.Closed; Score = 100; Queues = None; CommandHandler = processConnection }
-    let runHandler (data: PeerData) (command: PeerCommand) = 
+    let runHandler (data: PeerData) (command: PeerCommand) =
         // logger.DebugF "PeerCommand> %A" command
         data.CommandHandler data command
 
@@ -676,7 +677,7 @@ result forever.
                 .Subscribe())
 
     interface IDisposable with
-        member x.Dispose() = 
+        member x.Dispose() =
             disposable.Dispose()
 
     interface IPeer with
