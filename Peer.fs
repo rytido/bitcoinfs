@@ -531,7 +531,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             disposable.Add(peerQueues)
 
             // Prepare and send out my version message
-            let version = Version.Create(SystemClock.Instance.Now, target, NetworkAddr.MyAddress.EndPoint, int64(random.Next()), "Satoshi YOLO 1.0", tip.Height, 1uy)
+            let version = Version.Create(Instant.FromDateTimeUtc(DateTime.UtcNow), target, NetworkAddr.MyAddress.EndPoint, int64(random.Next()), "Satoshi YOLO 1.0", tip.Height, 1uy)
             (peerQueues :> IPeerSend).Send(new BitcoinMessage("version", version.ToByteArray()))
 
             // The handshake observable waits for the verack and the version response from the other side. When both parties have
@@ -702,7 +702,7 @@ let dropOldPeers() =
 
 let bootstrapPeers() =
     async {
-        let now = NodaTime.Instant.FromDateTimeUtc(DateTime.UtcNow)
+        let now = Instant.FromDateTimeUtc(DateTime.UtcNow)
         let port = if settings.TestNet then 18444 else 8333
 
         let! entry = Async.AwaitTask(Dns.GetHostEntryAsync("seed.bitnodes.io"))

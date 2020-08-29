@@ -9,8 +9,8 @@
     <Compile Include="Config.fs" />
     <Compile Include="Protocol.fs" />
     <Compile Include="Db.fs" />
-    <Compile Include="Peer.fs" />
     <Compile Include="Script.fs" />
+    <Compile Include="Peer.fs" />
     <Compile Include="Tracker.fs" />
     <Compile Include="Mempool.fs" />
     <Compile Include="Checks.fs" />
