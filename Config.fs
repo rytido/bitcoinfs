@@ -20,6 +20,8 @@ type Settings = {
     PruneDepth: int
     ReadTimeout: int
     BloomFilterSize: int
+    SocksHost: string
+    SocksPort: int
 }
 
 let settings = {
@@ -40,6 +42,8 @@ let settings = {
     PruneDepth = 2000000
     ReadTimeout = 30000
     BloomFilterSize = 10000
+    SocksHost = "127.0.0.1"
+    SocksPort = 9150
 }
 
 let logger1 s = Console.WriteLine("{0:s} {1}", DateTime.Now, s)

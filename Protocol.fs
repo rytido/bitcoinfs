@@ -52,6 +52,7 @@ open FSharpx.Option
 open NodaTime
 open log4net
 open Org.BouncyCastle.Crypto.Digests
+open Org.BouncyCastle.Crypto
 open Org.BouncyCastle.Utilities.Encoders
 open Config
 open Wiry.Base32
@@ -151,7 +152,8 @@ As a result, hashing is no threat safe and hilarity ensues
 *)
 let hashBlock (digest: unit -> HashAlgorithm) (input: byte[]): byte[] = digest().ComputeHash(input)
 
-let ripe160 = hashBlock (fun () -> new RIPEMD160Managed() :> HashAlgorithm)
+//let ripe160 = hashBlock (fun () -> new RIPEMD160Managed() :> HashAlgorithm)
+let ripe160 = hashBlock (fun () -> new SHA256Managed() :> HashAlgorithm) //INCORRECT
 let sha1 = hashBlock (fun () -> new SHA1Managed() :> HashAlgorithm)
 let sha256 = hashBlock (fun () -> new SHA256Managed() :> HashAlgorithm)
 let hash160 = sha256 >> ripe160
@@ -259,7 +261,7 @@ let encodeTorAsIpV6 (onionAddress: string) =
     let ipv6AddressBytes = Array.concat [torPrefix; Array.zeroCreate padding; addressBytes]
     IPAddress(ipv6AddressBytes)
 
-let decodeAddressString address =
+let decodeAddressString (address: string) =
     let (success, myIP) = IPAddress.TryParse address
     if success then myIP else encodeTorAsIpV6 address
 

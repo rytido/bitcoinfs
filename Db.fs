@@ -81,7 +81,7 @@ let updateAddr(addr: AddrEntry) =
         updateAddrQuery.Parameters.Add("@user_agent", DbType.String, 256) |> ignore
         updateAddrQuery.Parameters.[0].Value <- addr.Address.EndPoint.Address.ToString()
         updateAddrQuery.Parameters.[1].Value <- addr.Address.EndPoint.Port
-        let dts = (new Instant(int64(addr.Timestamp) * NodaConstants.TicksPerSecond)).ToDateTimeUtc()
+        let dts = DateTime.Now //(new Instant(int64(addr.Timestamp) * NodaConstants.TicksPerSecond)).ToDateTimeUtc()
         updateAddrQuery.Parameters.[2].Value <- dts
         updateAddrQuery.Parameters.[3].Value <- ""
         updateAddrQuery.ExecuteNonQuery() |> ignore
