@@ -4,6 +4,7 @@ open System
 
 type Settings = {
     BaseDir: string
+    BlocksDir: string
     ConnectTimeout: float
     CommandTimeout: float
     HandshakeTimeout: float
@@ -18,10 +19,12 @@ type Settings = {
     MaxPeers: int
     PruneDepth: int
     ReadTimeout: int
+    BloomFilterSize: int
 }
 
 let settings = {
     BaseDir = "/home/bitcoin"
+    BlocksDir = "/home/bitcoin/blocks"
     ConnectTimeout = 5.
     CommandTimeout = 15.
     HandshakeTimeout = 10.
@@ -36,6 +39,7 @@ let settings = {
     MaxPeers = 5
     PruneDepth = 2000000
     ReadTimeout = 30000
+    BloomFilterSize = 10000
 }
 
 let logger1 s = Console.WriteLine("{0:s} {1}", DateTime.Now, s)

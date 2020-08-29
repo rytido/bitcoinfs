@@ -3,16 +3,16 @@
 
 This file is part of F# Bitcoin.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files 
-(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, 
-copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *)
 
@@ -37,12 +37,13 @@ open NodaTime
 open System.Data
 open System.Data.SQLite
 open LevelDB
+open Config
 
 (**
 # Database
 
 The database module handles the persistance of the blockchain, unspent transaction outputs and peer
-addresses. 
+addresses.
 
 - The largest amount of data is in the blocks of the blockchain. It represents nearly 30 GB at this time
 (2015) and will continue growing. They are written as binary files so that they can be conveniently trimmed.
@@ -55,20 +56,20 @@ provide and the amount of data isn't an issue here.
 
 ## Backup
 To make a backup, the easiest way is to shutdown the application and copy the content of the `utxo` folder which has the
-UTXO database and the `bitcoin.db` file that has the associated metadata. The blocks can be saved too but they are not 
+UTXO database and the `bitcoin.db` file that has the associated metadata. The blocks can be saved too but they are not
 vital.
 *)
 let connectionString = sprintf "Data Source=%s/bitcoin.db" baseDir
 let dbLock = new obj() // Serialize all db access because of SQLite
 
 (**
-DB Connections can't be shared between threads but they are coming from a pool and are cheap to establish. Using ADO.NET, 
+DB Connections can't be shared between threads but they are coming from a pool and are cheap to establish. Using ADO.NET,
 I can write parametrized SQL statements. It's direct SQL and therefore not portable to other DB providers but it works
-well here. The database model isn't sophisticated enough to warrant an entity-relation library. I prefer to keep the 
+well here. The database model isn't sophisticated enough to warrant an entity-relation library. I prefer to keep the
 database layer a straight get and put interface.
 *)
 
-let updateAddr(addr: AddrEntry) = 
+let updateAddr(addr: AddrEntry) =
     lock dbLock (fun () ->
         use connection = new SQLiteConnection(connectionString)
         connection.Open()
@@ -103,7 +104,7 @@ let getPeers() =
         connection.Open()
         use command = new SQLiteCommand("select host, port from peerInfo where state = 0 order by ts desc limit 1000", connection)
         use reader = command.ExecuteReader()
-        [while reader.Read() do 
+        [while reader.Read() do
             let host = reader.GetString(0)
             let port = reader.GetInt32(1)
             let ip = decodeAddressString host
@@ -118,8 +119,8 @@ let getPeer() =
         connection.Open()
         use command = new SQLiteCommand("select host, port from peerInfo where state = 0 order by ts desc limit 1", connection)
         use reader = command.ExecuteReader()
-        let peers = 
-            [while reader.Read() do 
+        let peers =
+            [while reader.Read() do
                 let host = reader.GetString(0)
                 let port = reader.GetInt32(1)
                 let ip = decodeAddressString host
@@ -131,7 +132,7 @@ let getPeer() =
 (*
 Drop peers that are older than a certain timestamp. Normally, 3h ago.
 *)
-let dropOldPeers dts = 
+let dropOldPeers dts =
     use connection = new SQLiteConnection(connectionString)
     connection.Open()
     use command = new SQLiteCommand("delete from peerInfo where ts <= @ts", connection)
@@ -169,7 +170,7 @@ and will be zero. The column is there for later. The hash isn't part of the head
 header itself. It is calculated during parsing and then stored. Finally, the height is also determined by looking up the previous header.
 If the previous header is not present in the database, then the header is skipped and not stored at all. When the missing
 header comes and the block connects, I'll get the header again.
-*)    
+*)
 let headerConnection = new SQLiteConnection(connectionString)
 headerConnection.Open()
 let command = new SQLiteCommand(@"insert or replace into header(hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main, state) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", headerConnection)
@@ -190,14 +191,14 @@ let readTip(): byte[] =
     lock dbLock (fun () ->
         use command = new SQLiteCommand("select best from chainstate where id = 0", headerConnection)
         use reader = command.ExecuteReader()
-        [while reader.Read() do 
+        [while reader.Read() do
             let tip = Array.zeroCreate 32
             reader.GetBytes(0, 0L, tip, 0, 32) |> ignore
             yield tip
         ] |> List.head
     )
 
-let writeTip(tip: byte[]) = 
+let writeTip(tip: byte[]) =
     lock dbLock (fun () ->
         use command = new SQLiteCommand("update chainstate set best = ? where id = 0", headerConnection)
         command.Parameters.Add("best", DbType.Binary, 32) |> ignore
@@ -207,7 +208,7 @@ let writeTip(tip: byte[]) =
 
 let getHeader (reader: SQLiteDataReader) =
     lock dbLock (fun () ->
-        [while reader.Read() do 
+        [while reader.Read() do
             let hash = Array.zeroCreate 32
             reader.GetBytes(0, 0L, hash, 0, 32) |> ignore
             let height = reader.GetInt32(1)
@@ -231,7 +232,7 @@ let getHeader (reader: SQLiteDataReader) =
         ]
     )
 
-let genesisHeader = 
+let genesisHeader =
     lock dbLock (fun () ->
         use command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where height = 0", headerConnection)
         use reader = command.ExecuteReader()
@@ -239,7 +240,7 @@ let genesisHeader =
         res.Head
         )
 
-let readHeader(hash: byte[]): BlockHeader = 
+let readHeader(hash: byte[]): BlockHeader =
     lock dbLock (fun () ->
         use command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where hash = ?", headerConnection)
         command.Parameters.Add("hash", DbType.Binary, 32) |> ignore
@@ -259,7 +260,7 @@ let getHeaderByHeight (height: int): BlockHeader =
         if res.Length <> 0 then res.[0] else BlockHeader.Zero
     )
 
-let getNextHeader(hash: byte[]): BlockHeader = 
+let getNextHeader(hash: byte[]): BlockHeader =
     lock dbLock (fun () ->
         use command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where prev_hash = ?", headerConnection)
         command.Parameters.Add("prev_hash", DbType.Binary, 32) |> ignore
@@ -269,7 +270,7 @@ let getNextHeader(hash: byte[]): BlockHeader =
         if res.Length <> 0 then res.[0] else BlockHeader.Zero
     )
 
-let writeHeaders(header: BlockHeader) = 
+let writeHeaders(header: BlockHeader) =
     lock dbLock (fun () ->
         command.Parameters.[0].Value <- header.Hash
         command.Parameters.[1].Value <- header.Height
@@ -315,7 +316,7 @@ type BloomFilter(filter: byte[], cHashes: int, nTweak: int) =
             bits.Get(int bucket)
             )).All(fun b ->  b)
 
-    new(N: int, P: float, cHashes: int, nTweak: int) = 
+    new(N: int, P: float, cHashes: int, nTweak: int) =
         let size = int(min (-1.0/log 2.0**2.0*(float N)*log P) 36000.0)
         new BloomFilter(Array.zeroCreate size, cHashes, nTweak)
     member x.Add v = add v
@@ -342,7 +343,7 @@ type Wallet() =
         lock dbLock (fun () ->
             use command = new SQLiteCommand("select id, account, hash, address from keys", headerConnection)
             use reader = command.ExecuteReader()
-            [while reader.Read() do 
+            [while reader.Read() do
                 let id = reader.GetInt32(0)
                 let account  = reader.GetInt32(1)
                 let hash = Array.zeroCreate 20
@@ -395,7 +396,7 @@ type TxTableAccessor() =
                 insertTx.Parameters.[2].Value <- hash
                 insertTx.Parameters.[3].Value <- utxo.TxOut.Value
                 insertTx.ExecuteNonQuery() |> ignore
-                logger.InfoF "%s %d" addressEntry.Address utxo.TxOut.Value
+                logger2 addressEntry.Address utxo.TxOut.Value
             } |> ignore
             )
 
@@ -416,7 +417,7 @@ type TxTableAccessor() =
         deleteTx.Parameters.Add("vout", DbType.Int32) |> ignore
 
     interface IDisposable with
-        override x.Dispose() = 
+        override x.Dispose() =
             insertTx.Dispose()
             deleteTx.Dispose()
             connection.Dispose()
@@ -430,7 +431,7 @@ let txTableAccessor = new TxTableAccessor()
 This wallet does not store the history of transactions but just the result (unspent outputs). So when a transaction
 spents an outpoint, it is deleted from the `tx` table. Another option would be to keep on adding records. I may change
 the implementation later. It slightly makes undoing a transaction more complicated. One must differenciate between
-undoing a transaction vs spending an output. 
+undoing a transaction vs spending an output.
 *)
 let addIfInWallet (txTableAccessor: TxTableAccessor) (wallet: Wallet) (outpoint: OutPoint) (utxo: UTXO) =
     let script = utxo.TxOut.Script
@@ -456,7 +457,7 @@ type LevelDBUTXOAccessor(db: DB, wallet: Wallet, txTableAccessor: TxTableAccesso
     let ro = new ReadOptions()
     let wo = new WriteOptions()
 
-    let deleteUTXO (outpoint: OutPoint) = 
+    let deleteUTXO (outpoint: OutPoint) =
         let k = outpoint.ToByteArray()
         maybe {
             let! v = Option.ofNull (db.Get(ro, k))
@@ -464,7 +465,7 @@ type LevelDBUTXOAccessor(db: DB, wallet: Wallet, txTableAccessor: TxTableAccesso
             removeIfInWallet txTableAccessor wallet outpoint utxo
         } |> ignore
         db.Delete(wo, k)
-    let addUTXO (outpoint: OutPoint) (utxo: UTXO) = 
+    let addUTXO (outpoint: OutPoint) (utxo: UTXO) =
         let k = outpoint.ToByteArray()
         let v = utxo.ToByteArray()
         addIfInWallet txTableAccessor wallet outpoint utxo
@@ -472,9 +473,9 @@ type LevelDBUTXOAccessor(db: DB, wallet: Wallet, txTableAccessor: TxTableAccesso
     let getUTXO (outpoint: OutPoint) =
         let k = outpoint.ToByteArray()
         let v = db.Get(ro, k)
-        if v <> null 
+        if v <> null
         then Some(ParseByteArray v UTXO.Parse)
-        else 
+        else
             None
 
     // Use the fact that the txhash is a prefix for the key
@@ -484,12 +485,12 @@ type LevelDBUTXOAccessor(db: DB, wallet: Wallet, txTableAccessor: TxTableAccesso
         let cursor = new Iterator(db, ro)
         cursor.Seek(txHash)
         let mutable count = 0
-        let rec getCountInner (count: int): int = 
+        let rec getCountInner (count: int): int =
             if cursor.IsValid then
                 let k = cursor.Key
                 let hash = k.[0..txHash.Length-1] // first part of the key is the txhash
-                if hash = txHash 
-                then 
+                if hash = txHash
+                then
                     cursor.Next()
                     getCountInner (count+1)
                 else count
@@ -498,11 +499,11 @@ type LevelDBUTXOAccessor(db: DB, wallet: Wallet, txTableAccessor: TxTableAccesso
         let count = getCountInner(0)
         count
 
-    new() = 
+    new() =
         let options = new Options()
         options.CreateIfMissing <- true
         new LevelDBUTXOAccessor(DB.Open(options, sprintf "%s/utxo" baseDir), wallet, txTableAccessor)
-        
+
     interface IUTXOAccessor with
         member x.DeleteUTXO(outpoint) = deleteUTXO outpoint
         member x.AddUTXO(outpoint, txOut) = addUTXO outpoint txOut
@@ -516,7 +517,7 @@ let levelDbAccessor = new LevelDBUTXOAccessor()
 let utxoAccessor = levelDbAccessor :> IUTXOAccessor
 
 let scanUTXO () =
-    let creditToWallet = addIfInWallet txTableAccessor wallet 
+    let creditToWallet = addIfInWallet txTableAccessor wallet
     lock dbLock (fun () ->
         let ro = new ReadOptions()
         use cursor = new Iterator(levelDbAccessor.Db, ro)
@@ -541,14 +542,14 @@ It is kept in the same directory location as the block file and can be trimmed a
 blocks and undo files removes the ability to reorganize the blockchain into a fork that is deeper than least recent block
 available.
 *)
-type TxOperation = 
-    | Add 
-    | Delete 
+type TxOperation =
+    | Add
+    | Delete
 
 type IUTXOWriter =
     abstract Write: TxOperation * OutPoint * UTXO -> unit
 
-(** 
+(**
 A few helper functions for validity checks. They appear early in the code because of the `processUTXO` function which goes through the
 transactions and calls the UTXO accessor. I take advantage of this traversal to do some basic checks.
 *)
@@ -571,14 +572,14 @@ monads keep the function pure (except at the db level of course).
 *)
 let processUTXO (utxoAccessor: IUTXOAccessor) (utxoWriter: IUTXOWriter) (isCoinbase: bool) (height: int) (tx: Tx)  =
     maybe {
-        let! totalIn = 
+        let! totalIn =
             tx.TxIns |> Seq.map (fun txIn ->
                 if not isCoinbase then
                     let utxo = utxoAccessor.GetUTXO txIn.PrevOutPoint
                     utxo |> Option.map (fun utxo ->
                         utxoAccessor.DeleteUTXO txIn.PrevOutPoint
                         utxoWriter.Write(Delete, txIn.PrevOutPoint, utxo)
-                        utxo) 
+                        utxo)
                         |> Option.bind (fun utxo -> checkCoinbaseMaturity utxo height)
                         |> Option.bind (fun utxo -> checkMoney utxo.TxOut.Value)
                 else Some 0L
@@ -591,7 +592,7 @@ let processUTXO (utxoAccessor: IUTXOAccessor) (utxoWriter: IUTXOWriter) (isCoinb
                     utxoAccessor.AddUTXO (outpoint, utxo)
                     utxoWriter.Write(Add, outpoint, utxo)
                 if not isCoinbase
-                then checkMoney txOut.Value 
+                then checkMoney txOut.Value
                 else Some 0L
             ) |> Seq.toList |> Option.sequence |> Option.map Seq.sum
         let! _ = checkMoney totalIn
@@ -601,7 +602,7 @@ let processUTXO (utxoAccessor: IUTXOAccessor) (utxoWriter: IUTXOWriter) (isCoinb
         return fee
     }
 
-(** 
+(**
 ## Block storage
 
 Blocks are stored as flat binary file in the directory under the blocksDir configured in the `app.config`. The path follows a naming
@@ -640,14 +641,14 @@ type UndoWriter(fs: FileStream) =
             fs.Close()
 
     interface IUTXOWriter with
-        member x.Write(txOp: TxOperation, outpoint: OutPoint, utxo: UTXO) = 
+        member x.Write(txOp: TxOperation, outpoint: OutPoint, utxo: UTXO) =
             match txOp with
             | Add -> writer.Write(0uy) // 0 is add
             | Delete -> writer.Write(1uy)
             writer.Write(outpoint.ToByteArray())
             writer.Write(utxo.ToByteArray())
-    
-let storeUndoBlock (b: Block) = 
+
+let storeUndoBlock (b: Block) =
     let path = getBlockDir b.Header
     let fs = new FileStream(sprintf "%s/%s.undo" path (hashToHex b.Header.Hash), FileMode.Create)
     new UndoWriter(fs)
@@ -664,8 +665,8 @@ let getBlockSize (bh: BlockHeader) =
     use fs = new FileStream(sprintf "%s/%s" path (hashToHex bh.Hash), FileMode.Open)
     int32 fs.Length
 
-let undoBlock (utxoAccessor: IUTXOAccessor) (bh: BlockHeader) = 
-    logger.DebugF "Undoing block #%d" bh.Height
+let undoBlock (utxoAccessor: IUTXOAccessor) (bh: BlockHeader) =
+    logger2 "Undoing block #" bh.Height
     let path = getBlockDir bh
 
     use fsUndo = new FileStream(sprintf "%s/%s.undo" path (hashToHex bh.Hash), FileMode.Open)
@@ -675,8 +676,8 @@ let undoBlock (utxoAccessor: IUTXOAccessor) (bh: BlockHeader) =
         let op = reader.ReadByte()
         let outpoint = OutPoint.Parse reader
         let utxo = UTXO.Parse reader
-        let fop = 
-            match op with 
+        let fop =
+            match op with
             | 0uy -> fun() -> utxoAccessor.DeleteUTXO outpoint // 0 was an add and to undo an add, do a delete
             | 1uy -> fun() -> utxoAccessor.AddUTXO (outpoint, utxo)
             | _ -> ignore
@@ -686,15 +687,15 @@ let undoBlock (utxoAccessor: IUTXOAccessor) (bh: BlockHeader) =
     let block = loadBlock bh
     block.Txs
 
-let pruneBlocks (minHeight: int) = 
+let pruneBlocks (minHeight: int) =
     let blockRegex = "\d+/(\d+)$"
-    let rec pruneBlock (path: String) = 
+    let rec pruneBlock (path: String) =
         if path.Replace ('\\', '/') |> Regex.tryMatch blockRegex |> Option.map (fun m ->
             let height = int m.GroupValues.[0]
             height < minHeight
             ) |?| false
-        then 
-            logger.InfoF "Deleting %s" path
+        then
+            logger2 "Deleting" path
             let dir = new DirectoryInfo(path)
             dir.Delete true
             if dir.Parent.GetDirectories() |> Array.isEmpty then dir.Parent.Delete()
@@ -704,4 +705,4 @@ let pruneBlocks (minHeight: int) =
                 pruneBlock dir
 
     pruneBlock settings.BlocksDir
-            
+
