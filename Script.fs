@@ -3,20 +3,20 @@
 
 This file is part of F# Bitcoin.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files 
-(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, 
-copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *)
 
-(** 
+(**
 # Script Interpreter
 
 *)
@@ -33,14 +33,14 @@ math operations, these byte strings are considered little endian big integers.
 The language has IF/THEN/ELSE but no loops. It is therefore non Turing complete and program execution time is bounded.
 Besides the classic operators, it has cryptographic functions such as hashing operators and signature verification.
 
-When a transaction produces Outputs, they mention a value and a script. The later is similar to a program split in two. To 
+When a transaction produces Outputs, they mention a value and a script. The later is similar to a program split in two. To
 spend the output, one must provide the other half of the program so that the full program executes successfully.
 Another way to see it is to consider the output as a challenge and the spending transaction as the answer to the challenge.
 
 Most of the transactions use the Pay-To-PubHash script. The script has a 20 byte long hash value. The spending transaction
 must provide a pub key that hashes to the given value and a signature that matches both the pub key and the transaction content.
 
-However, many other scripts exist even though only a few are considered standard. Standard scripts have been created to 
+However, many other scripts exist even though only a few are considered standard. Standard scripts have been created to
 fulfill a particular use case and are recognized by the core client. The later will not relay transactions that contain
 non standard scripts. This node does not care and will relay anything that validates successfully.
 
@@ -61,16 +61,16 @@ open Org.BouncyCastle.Utilities.Encoders
 open Org.BouncyCastle.Crypto.Digests
 open Org.BouncyCastle.Crypto.Parameters
 open Org.BouncyCastle.Asn1
-open Secp256k1
+open Secp256k1Net
 open Org.BouncyCastle.Crypto.Signers
 open Protocol
 
-(** 
-##  Bitcoin Elliptic Curve secp256k1 
+(**
+##  Bitcoin Elliptic Curve secp256k1
 *)
 let halfN = 57896044618658097711785492504343953926418782139537452191302581570759080747168I // Half the order of N
 
-(** 
+(**
 ## Commonly used op codes.
 Other op codes are implemented but are seldom used. I left their numeric value in the code.
  *)
@@ -82,13 +82,13 @@ let OP_DATA_20 = 20uy // Push the next 20 bytes on the stack
 let OP_DATA_32 = 32uy // Push the next 32 bytes on the stack
 let OP_EQUAL = 135uy // Compare the top two elements
 let OP_EQUALVERIFY = 136uy // Do the same as above but fail the script if they are not equal
-[<Literal>] 
+[<Literal>]
 let OP_CHECKSIG = 172uy // Single signature check
-[<Literal>] 
+[<Literal>]
 let OP_CHECKSIGVERIFY = 173uy // As above and fail the script if the check doesn't succeed
-[<Literal>] 
+[<Literal>]
 let OP_CHECKMULTISIG = 174uy // Multi signature check
-[<Literal>] 
+[<Literal>]
 let OP_CHECKMULTISIGVERIFY = 175uy // As above and fail the script if the check doesn't succeed
 let OP_DATA_65 = 65uy // Push the next 65 bytes on the stack
 let OP_DATA_33 = 33uy // Push the next 33 bytes on the stack
@@ -108,13 +108,13 @@ let scriptToHash (script: byte[]) =
     let p2sh = if (script.Length = 23 && script.[0] = OP_HASH160 && script.[1] = OP_DATA_20 && script.[22] = OP_EQUAL) then Some script.[2..21] else None
     Option.coalesce p2pkh p2sh
 
-(** 
-## P2SH 
+(**
+## P2SH
 Pay to Script Hash is specified in [BIP-16][2] and has its own address space. P2SH is quite odd. The script itself is
 half the story. It is first verified normally like any other script but then if the evaluator recognizes a special script pattern and he will do
 something completely different. It is as if the program said `print hello` but then starts calculating pi.
 
-Anyway, the idea is that the signing script gives the signatures but also the pub script that it is signing. Normally, 
+Anyway, the idea is that the signing script gives the signatures but also the pub script that it is signing. Normally,
 you would have two scripts that once stitched together form a program. P2SH has a script inside a script. That script is provided as data
 pushed into the stack but then that data is then poped and evaluated. Once again BIP-16 is
 strange and I just scratched the surface. For more information refer to its specification.
@@ -124,19 +124,19 @@ strange and I just scratched the surface. For more information refer to its spec
 // This test is the first of a few checks
 let isP2SH (script: byte[]) = script.Length = 23 && script.[0] = OP_HASH160 && script.[1] = OP_DATA_20 && script.[22] = OP_EQUAL
 
-// These are used in BIP-37 when the update mode is BLOOM_UPDATE_P2PUBKEY_ONLY. Since it's a probabilistic filter, 
+// These are used in BIP-37 when the update mode is BLOOM_UPDATE_P2PUBKEY_ONLY. Since it's a probabilistic filter,
 // I can report false positives and therefore I don't have to be accurate
 let isPay2PubKey (script: byte[]) = script.Length > 0 && script.[script.Length-1] = OP_CHECKSIG
 let isPay2MultiSig (script: byte[]) = script.Length > 0 && script.[script.Length-1] = OP_CHECKMULTISIG
 
-(** 
-## Signature verification 
+(**
+## Signature verification
 
 Signature verification is one of the most expensive steps in verification. Bitcoin core uses the OPENSSL library but
 this application uses another implementation specially written for Bitcoin. It is significantly faster. However, it may
 have incompatibilities.
 *)
-let ECDSACheck (txHash: byte[], pub: byte[], signature: byte[]) = 
+let ECDSACheck (txHash: byte[], pub: byte[], signature: byte[]) =
     if signature.Length > 0 && pub.Length > 0 then // 0 length signature or pub keys crash the library
         let result = Signatures.Verify(txHash, signature, pub)
         result = Signatures.VerifyResult.Verified
@@ -153,16 +153,16 @@ let ECDSACheck (txHash: byte[], pub: byte[], signature: byte[]) =
     signer.VerifySignature(txHash, r.Value, s.Value)
     *)
 
-(** 
-## Stack 
+(**
+## Stack
 
 The stack is implemented as a .NET List, i.e. a variable size array. Its elements are native byte arrays.
 I added extension methods so that I can use the array as a stack with push & pop.
 *)
 type List<'a> with
-    member x.Push(v: 'a) = 
+    member x.Push(v: 'a) =
         x.Add(v)
-    member x.Pop() = 
+    member x.Pop() =
         let v = x.Peek()
         x.RemoveAt(x.Count-1)
         v
@@ -170,18 +170,18 @@ type List<'a> with
 
 type ByteList() =
     inherit List<byte[]>()
-    member x.Push(v: byte[]) = 
+    member x.Push(v: byte[]) =
         // logger.DebugF "Pushing %s" (Hex.ToHexString v)
         base.Add(v)
 
-(** 
-## Compute the signature hash 
+(**
+## Compute the signature hash
 
 The signature is applied on a given document. Instead of signing the entire document, one first calculates
-a hash of the document and signs the hash. Bitcoin has a specific way to create the hash and it depends on 
+a hash of the document and signs the hash. Bitcoin has a specific way to create the hash and it depends on
 a few parameters.
 
-- the signature type. Most of the time, it's `SIGHASH_ALL` and the complete transaction is hashed. After that, 
+- the signature type. Most of the time, it's `SIGHASH_ALL` and the complete transaction is hashed. After that,
 changing a single byte of the transaction invalidates the signature. But it can be `SIGHASH_NONE` for which all
 the outputs are blanked meaning that the signature will remain valid even if the outputs are changed. It can
 also be `SIGHASH_SINGLE`. In the last case, all the outputs except the one with the same index as the input signature
@@ -193,11 +193,11 @@ The signing process is described [here][1].
 
 [1]: https://en.bitcoin.it/wiki/OP_CHECKSIG
 *)
-let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: int) = 
+let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: int) =
     let mutable returnBuggyHash = false
 
     let anyoneCanPay = (sigType &&& 0x80) <> 0
-    let sigHashType = 
+    let sigHashType =
         match sigType &&& 0x1F with
         | 2 -> 2uy
         | 3 -> 3uy
@@ -210,18 +210,18 @@ let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: int) =
         writer.WriteVarInt(1)
         let txIn2 = new TxIn(tx.TxIns.[index].PrevOutPoint, subScript, tx.TxIns.[index].Sequence)
         writer.Write(txIn2.ToByteArray())
-    else // otherwise keep the other inputs but blank their script 
+    else // otherwise keep the other inputs but blank their script
         writer.WriteVarInt(tx.TxIns.Length)
         tx.TxIns |> Array.iteri (fun i txIn ->
             let script = if i = index then subScript else Array.empty
-            let txIn2 = 
-                if sigHashType <> 1uy && i <> index then 
+            let txIn2 =
+                if sigHashType <> 1uy && i <> index then
                     new TxIn(txIn.PrevOutPoint, script, 0)
                 else
                     new TxIn(txIn.PrevOutPoint, script, txIn.Sequence)
             writer.Write(txIn2.ToByteArray())
         )
-    
+
     match sigHashType with
     | 1uy ->
         writer.WriteVarInt(tx.TxOuts.Length)
@@ -254,17 +254,17 @@ let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: int) =
         let data = oms.ToArray()
         dsha data
 
-(** 
-### Stack element conversion 
+(**
+### Stack element conversion
 
 These functions are used when integers are put into the stack. They must be converted to byte[]. It's using
-variable length byte strings in 1-complement encoding. Therefore there is positive 0 and negative 0. 
+variable length byte strings in 1-complement encoding. Therefore there is positive 0 and negative 0.
 *)
 let bigintToBytes (i: bigint) =
     let pos = abs i
     let bi = pos.ToByteArray()
     let posTrimIdx = revFind bi (fun b -> b <> 0uy)
-    let iTrimIdx = 
+    let iTrimIdx =
         if (posTrimIdx >= 0 && (bi.[posTrimIdx] &&& 0x80uy) <> 0uy)
             then posTrimIdx + 1
             else posTrimIdx
@@ -275,11 +275,11 @@ let bigintToBytes (i: bigint) =
 
 let intToBytes (i: int) = bigintToBytes (bigint i)
 let int64ToBytes (i: int64) = bigintToBytes (bigint i)
-        
+
 let bytesToInt (bytes: byte[]) =
     let b = Array.zeroCreate<byte> bytes.Length
     Array.Copy(bytes, b, bytes.Length)
-    let neg = 
+    let neg =
         if b.Length > 0 && b.[b.Length-1] &&& 0x80uy <> 0uy then
             b.[b.Length-1] <- b.[b.Length-1] &&& 0x7Fuy
             true
@@ -288,8 +288,8 @@ let bytesToInt (bytes: byte[]) =
     let bi = bigint b
     if neg then -bi else bi
 
-(** 
-## Interpreter 
+(**
+## Interpreter
 
 The interpreter takes a transaction hashing function at construction. When the function is applied, the index
 of the input matters and will not give the same hash.
@@ -301,25 +301,25 @@ type ScriptRuntime(getTxHash: byte[] -> int -> byte[]) =
     let mutable skipping = false
     let mutable codeSep = 0
 
-(** 
+(**
 ### Basic stack helpers *)
-    let checkDepth (stack: List<'a>) minDepth = 
+    let checkDepth (stack: List<'a>) minDepth =
         if stack.Count < minDepth then raise (ValidationException "not enough stack depth")
     let checkMaxDepth () =
         if evalStack.Count + altStack.Count > stackMaxDepth then raise (ValidationException "stack too deep")
-    let popAsBool() = 
+    let popAsBool() =
         checkDepth evalStack 1
         bytesToInt(evalStack.Pop()) <> 0I
     let verify() =
-        if not (popAsBool()) 
+        if not (popAsBool())
         then raise (ValidationException "verification failed")
-    let fail() = 
+    let fail() =
         evalStack.Push(intToBytes(0))
         raise (ValidationException "verification failed")
     let checkOverflow (bytes: byte[]) =
         if bytes.Length > 4 then fail()
         bytes
-    let checkIfStackEmpty() = 
+    let checkIfStackEmpty() =
         if ifStack.Count > 0 then fail()
 
     let roll m =
@@ -336,8 +336,8 @@ type ScriptRuntime(getTxHash: byte[] -> int -> byte[]) =
             evalStack.Push(evalStack.Item(evalStack.Count-n-depth))
         checkMaxDepth()
 
-(** 
-### Operators on stack elements 
+(**
+### Operators on stack elements
 
 They pull a certain number of elements from the stack, apply a function and then
 push the result back to the stack. The number of arguments and the nature of the operation
@@ -348,25 +348,25 @@ varies with the helper.
         let arg = evalStack.Pop() |> checkOverflow |> bytesToInt |> int64
         f(arg) |> int64ToBytes |> evalStack.Push
 
-    let binaryOp (f: int64 -> int64 -> int64) = 
+    let binaryOp (f: int64 -> int64 -> int64) =
         checkDepth evalStack 2
         let arg2 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int64
         let arg1 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int64
         f arg1 arg2 |> int64ToBytes |> evalStack.Push
 
-    let logicalOp (f: bool -> bool -> bool) = 
+    let logicalOp (f: bool -> bool -> bool) =
         checkDepth evalStack 2
         let arg2 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int |> fun x -> x <> 0
         let arg1 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int |> fun x -> x <> 0
         f arg1 arg2 |> (fun x -> if x then 1 else 0) |> intToBytes |> evalStack.Push
 
-    let binaryBoolOp (f: int -> int -> bool) = 
+    let binaryBoolOp (f: int -> int -> bool) =
         checkDepth evalStack 2
         let arg2 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int
         let arg1 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int
         f arg1 arg2 |> (fun x -> if x then 1 else 0) |> intToBytes |> evalStack.Push
 
-    let tertiaryOp (f: int -> int -> int -> int) = 
+    let tertiaryOp (f: int -> int -> int -> int) =
         checkDepth evalStack 3
         let arg3 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int
         let arg2 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int
@@ -378,8 +378,8 @@ varies with the helper.
         let data = evalStack.Pop()
         data |> f |> evalStack.Push
 
-(** 
-### Remove data that matches a predicate 
+(**
+### Remove data that matches a predicate
 
 This function parses the script quickly and identifies the data parts. The predicate is evaluated
 on the data part and if it returns true, the data is *removed* from the script. Surprisingly, there are
@@ -387,7 +387,7 @@ a few places where the standard dictates this behavior.
 
 It also removes any instance of OP_CODESEPARATOR
 *)
-    let removeData (script: byte[]) (pred: byte[] -> bool) = 
+    let removeData (script: byte[]) (pred: byte[] -> bool) =
         let dataList = new List<byte[]>()
         use ms = new MemoryStream(script)
         use reader = new BinaryReader(ms)
@@ -402,13 +402,13 @@ It also removes any instance of OP_CODESEPARATOR
                         let c = int b
                         if c >= 1 && c <= 78 then
                             let startPos = ms.Position-1L
-                            let len = 
+                            let len =
                                 match c with
                                 | 76 -> int (reader.ReadByte())
                                 | 77 -> int (reader.ReadInt16())
                                 | 78 -> reader.ReadInt32()
                                 | x -> x
-                            let canonical = 
+                            let canonical =
                                 if len < 75 then len
                                 elif len < 0xFF then 76
                                 elif len < 0xFFFF then 77
@@ -429,33 +429,33 @@ It also removes any instance of OP_CODESEPARATOR
                 let script = removeDataInner()
                 ms.Dispose()
                 (true, script, dataList.ToArray())
-            with 
-            | e -> 
+            with
+            | e ->
                 logger.DebugF "Invalid script %A" e
                 let currentPos = int ms.Position-1
                 (false, script.[0..currentPos], dataList.ToArray())
         )
 
-(** 
-### Remove the signature bytes from a script 
+(**
+### Remove the signature bytes from a script
 Because a signature cannot be signed, the algorithm always removes any occurence of the signature
 before passing the script to the hashing function
 *)
-    let removeSignatures (script: byte[]) (signatures: HashSet<byte[]>) = 
-        let subScript = 
+    let removeSignatures (script: byte[]) (signatures: HashSet<byte[]>) =
+        let subScript =
             if codeSep <> 0
                 then script.[codeSep..]
                 else script
         let (success, script, _) = removeData subScript (fun data -> signatures.Contains data)
-        if not success then fail() 
+        if not success then fail()
         script
 
-    let getData (script: byte[]) = 
+    let getData (script: byte[]) =
         let (_, _, data) = removeData script (fun _ -> true)
         data
 
-(** 
-### Calculate the number of OP_CHECKSIG 
+(**
+### Calculate the number of OP_CHECKSIG
 This is to protect against scripts that have a large number of OP_CHECKSIG. They are expensive to execute
 and without a limit can be used to make the node overwork. It's an anti-DoS measure but is quite painful to
 check in practice as every script must be checked even if the tx output is never spent.
@@ -467,7 +467,7 @@ check in practice as every script must be checked even if the tx output is never
             | [|op1; op2|] ->
                 match op2 with
                 | OP_CHECKSIG | OP_CHECKSIGVERIFY -> 1 // single signature check counts as 1
-                | OP_CHECKMULTISIG | OP_CHECKMULTISIGVERIFY -> // if preceeded by OP_X, multi-sig counts as x, 
+                | OP_CHECKMULTISIG | OP_CHECKMULTISIGVERIFY -> // if preceeded by OP_X, multi-sig counts as x,
                     if op1 >= OP_1 && op1 <= OP_16 // otherwise counts as 20
                     then int (op1-OP_1)
                     else 20
@@ -475,22 +475,22 @@ check in practice as every script must be checked even if the tx output is never
             | _ -> 0
             ) |> Seq.sum
 
-(** 
-### Single signature verification 
+(**
+### Single signature verification
 The signature hash type is the last byte of the signature and is always removed from it. Then any occurence
 of the signature itself is removed from the pub script before the tx hash is calculated.
 *)
-    let checksigInner pubScript pub (signature: byte[]) = 
+    let checksigInner pubScript pub (signature: byte[]) =
         let sigType = if signature.Length > 0 then signature.[signature.Length-1] else 0uy
         let txHash = getTxHash pubScript (int sigType)
         ECDSACheck(txHash, pub, signature)
 
-    let checksig script pub signature = 
+    let checksig script pub signature =
         let pubScript = removeSignatures script (new HashSet<byte[]>([signature], hashCompare))
         checksigInner pubScript pub signature
 
-(** 
-### Multi signature verification 
+(**
+### Multi signature verification
 
 In a multi sig, every pub key is checked against the signatures and then discarded. Eventually, all the
 signatures must match a pub key. Because of this order of evaluation, signatures have to be provided in the same
@@ -498,21 +498,21 @@ order as the pub keys.
 *)
 
 
-    let checkmultisig script (pubs: byte[][]) (sigs: byte[] list) = 
+    let checkmultisig script (pubs: byte[][]) (sigs: byte[] list) =
         let pubScript = removeSignatures script (new HashSet<byte[]>(sigs, hashCompare))
 
-        let checkOneSig (pubs: byte[] list) (signature: byte[]) = 
+        let checkOneSig (pubs: byte[] list) (signature: byte[]) =
             pubs |> List.tryFindIndex (fun pub -> checksigInner pubScript pub signature)
             |> Option.map (fun index -> pubs |> Seq.skip (index+1) |> Seq.toList)
-                
+
         sigs |> Option.foldM checkOneSig (pubs |> Array.toList) |> Option.isSome
 
-(** 
-## Evaluate a script 
+(**
+## Evaluate a script
 
 It's the main eval loop using tail recursion. The `eval` function reads one byte from the program and decide
 if it's data or instruction. If it's data, one or more bytes are then read. If it's instruction, it's always a single
-byte. It's an important trick. When the code must be skipped because it is on the wrong side of a If/then/else, 
+byte. It's an important trick. When the code must be skipped because it is on the wrong side of a If/then/else,
 the function can quickly jump to the next code.
 *)
     let eval (pushOnly: bool) (script: byte[]) =
@@ -533,13 +533,13 @@ the function can quickly jump to the next code.
                 elif c = 79 then
                     if not skipping then
                         evalStack.Push([| 0x81uy |])
-(** 
-### Push data 
+(**
+### Push data
 
 There are different size of push data, 1, 2, or 4 bytes
 *)
                 elif c >= 1 && c <= 78 then
-                    let len = 
+                    let len =
                         match c with
                         | 76 -> int (reader.ReadByte())
                         | 77 -> int (reader.ReadInt16())
@@ -550,16 +550,16 @@ There are different size of push data, 1, 2, or 4 bytes
                     if len > maxPushLength then raise (ValidationException "PushData exceeds 520 bytes")
                     if not skipping then
                         evalStack.Push(data)
-(** 
+(**
 ### OP_1 etc *)
 
                 elif c >= 81 && c <= 96 then
                     if not skipping then
                         evalStack.Push(intToBytes (c-80))
                 elif pushOnly then fail()
-(** 
-### IF/THEN/ELSE 
-Some special care must be given to if/then/else. They can nest so the 
+(**
+### IF/THEN/ELSE
+Some special care must be given to if/then/else. They can nest so the
 logic must accomodate that. The parser keeps a state variable `skipping` which tells it whether instructions and push data
 must be skipped or not. On a IF, the current value of `skipping` is pushed on a 'if' stack and if the parser is not currently
 skipping, the top of the stack is read. In other words, the if statement is evaluated if it was not part of a dead-if branch, but
@@ -579,16 +579,16 @@ is flipped only if the enclosing block isn't skipped too. The parser knows that 
                     checkDepth ifStack 1
                     skipping <- ifStack.Pop()
                 elif c >= 176 && c <= 185 then ignore()
-                elif 
+                elif
                     match c with
-                    | 101 | 102 
+                    | 101 | 102
                     | 126 | 127 | 128 | 129 | 131 | 132 | 133 | 134
                     | 141 | 142 | 149 | 150 | 151 | 152 | 153 -> true
                     | _ -> false
                     then fail()
                 elif not skipping then
-(** 
-### Stack operators 
+(**
+### Stack operators
 
 These do various permutations of the stack element and other simple stack manipulation. The parser also maintains a alt-stack but it
 is cleared between the parts of the script evaluation.
@@ -597,7 +597,7 @@ is cleared between the parts of the script evaluation.
                     | 97 -> ignore()
                     | 105 -> verify()
                     | 106 | 80 | 98 | 137 | 138 -> fail()
-                    | 107 -> 
+                    | 107 ->
                         checkDepth evalStack 1
                         let top = evalStack.Pop()
                         altStack.Push(top)
@@ -612,7 +612,7 @@ is cleared between the parts of the script evaluation.
                     | 110 -> dup 2 0
                     | 111 -> dup 3 0
                     | 112 -> dup 2 2
-                    | 113 -> 
+                    | 113 ->
                         roll 5
                         roll 5
                     | 114 ->
@@ -627,10 +627,10 @@ is cleared between the parts of the script evaluation.
                     | 117 ->
                         checkDepth evalStack 1
                         evalStack.Pop() |> ignore
-                    | 118 -> 
+                    | 118 ->
                         checkDepth evalStack 1
                         evalStack.Push(evalStack.Peek())
-                    | 119 -> 
+                    | 119 ->
                         checkDepth evalStack 2
                         evalStack.RemoveAt(evalStack.Count-2)
                     | 120 ->
@@ -656,7 +656,7 @@ is cleared between the parts of the script evaluation.
                         checkDepth evalStack 2
                         let top = evalStack.Peek()
                         evalStack.Insert(evalStack.Count-2, top)
-                    | 130 -> 
+                    | 130 ->
                         checkDepth evalStack 1
                         let top = evalStack.Peek()
                         evalStack.Push(intToBytes top.Length)
@@ -667,7 +667,7 @@ is cleared between the parts of the script evaluation.
                         let eq = if hashCompare.Equals(a, b) then 1 else 0
                         evalStack.Push(intToBytes eq)
                         if c = 136 then verify()
-(** 
+(**
 ### Arithmetic operators *)
                     | 139 ->
                         unaryOp(fun x -> x+1L)
@@ -685,7 +685,7 @@ is cleared between the parts of the script evaluation.
                         binaryOp(fun x y -> x+y)
                     | 148 ->
                         binaryOp(fun x y -> x-y)
-(** 
+(**
 ### Logical operators *)
                     | 154 ->
                         logicalOp(fun x y -> x&&y)
@@ -712,7 +712,7 @@ is cleared between the parts of the script evaluation.
                         binaryOp(fun x y -> if x>y then x else y)
                     | 165 ->
                         tertiaryOp(fun x a b -> if x>=a && x<b then 1 else 0)
-(** 
+(**
 ### Hashing operators *)
                     | 166 ->
                         hashOp(ripe160)
@@ -726,7 +726,7 @@ is cleared between the parts of the script evaluation.
                         hashOp(dsha)
                     | 171 ->
                         codeSep <- int(reader.BaseStream.Position)
-(** 
+(**
 ### Signature verification *)
                     | 172 | 173 ->
                         checkDepth evalStack 2
@@ -759,8 +759,8 @@ is cleared between the parts of the script evaluation.
         innerEval 0
         checkIfStackEmpty()
 
-(** 
-## P2SH special case 
+(**
+## P2SH special case
 
 After the P2SH script is evaluated normally, the stack is cleared. The signature script is then reevaluated
 and the last stack element poped from it. It becomes the new script to evaluate successfully.
@@ -779,11 +779,11 @@ TODO: Enforce strict BIP16 rules: No other opcode other than push data and redee
         let (_, _, data) = removeData script (fun _ -> true)
         data |> Array.last
 
-    member x.Verify(inScript: byte[], outScript: byte[]) = 
+    member x.Verify(inScript: byte[], outScript: byte[]) =
         try
             eval false inScript
             altStack.Clear() // bitcoin core does that
-            ifStack.Clear() // 
+            ifStack.Clear() //
             eval false outScript
             let res = popAsBool()
             res && (not (isP2SH outScript) || evalP2SH inScript)

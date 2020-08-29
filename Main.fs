@@ -1,22 +1,4 @@
-﻿(*** hide ***)
-(* Copyright 2015 Hanh Huynh Huu
-
-This file is part of F# Bitcoin.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files 
-(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, 
-copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
-and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*)
-
-(**
+﻿(**
 # Main
 *)
 module Main
@@ -50,7 +32,7 @@ open Db
 open Script
 
 (* The following stuff is for skipping validation during the import of a bootstrap file and for debugging purposes *)
-let skipScript (script: byte[]) = 
+let skipScript (script: byte[]) =
     script.Length = 25 && script.[0] = OP_DUP && script.[1] = OP_HASH160 && script.[24] = OP_CHECKSIG
 
 let processUTXOFast (utxoAccessor: IUTXOAccessor) (height) (tx: Tx) (i: int) =
@@ -87,8 +69,8 @@ let readBootstrapFast (firstBlock: int) (stream: Stream) =
         block.Header.Height <- i
         block.Header.IsMain <- true
         let prevBH = Db.readHeader block.Header.PrevHash
-        if prevBH.Hash <> zeroHash 
-        then 
+        if prevBH.Hash <> zeroHash
+        then
             prevBH.NextHash <- block.Header.Hash
             Db.writeHeaders prevBH
         block.Txs |> Seq.iteri (fun idx tx -> processUTXOFast utxoAccessor block.Header.Height tx idx)
@@ -109,7 +91,7 @@ let writeBootstrap (firstBlock: int) (lastBlock: int) (stream: Stream) =
         writer.Write(block.ToByteArray())
 
 (*** hide ***)
-let verifySingleTx (tx: Tx) (iTxIn: int) (outScript: byte[]) = 
+let verifySingleTx (tx: Tx) (iTxIn: int) (outScript: byte[]) =
     let scriptRuntime = new ScriptRuntime(Script.computeTxHash tx iTxIn)
     let txIn = tx.TxIns.[iTxIn]
     let inScript = txIn.Script
@@ -120,7 +102,7 @@ let decodeTx (s: string) =
     use ms = new MemoryStream(hex)
     use reader = new BinaryReader(ms)
     Tx.Parse(reader)
-    
+
 let readBootstrap (firstBlock: int) (stream: Stream) =
     use reader = new BinaryReader(stream)
     let mutable i = firstBlock
@@ -154,15 +136,15 @@ let addLocalNode() =
     let myNode = new IPEndPoint(IPAddress.Loopback, 8333)
     trackerIncoming.OnNext(TrackerCommand.Connect myNode)
 
-let runNode() = 
+let runNode() =
     Peer.initPeers()
-    
+
     Tracker.startTracker()
     Tracker.startServer()
     Mempool.startMempool()
     Blockchain.blockchainStart()
 
-    addLocalNode() 
+    addLocalNode()
 
     trackerIncoming.OnNext(TrackerCommand.GetPeers)
     Thread.Sleep(-1)
@@ -171,7 +153,7 @@ let runNode() =
 The main function initializes the application and waits forever
 *)
 [<EntryPoint>]
-let main argv = 
+let main argv =
     Config.BasicConfigurator.Configure() |> ignore
 
     // Db.scanUTXO()

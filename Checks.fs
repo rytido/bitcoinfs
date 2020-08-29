@@ -3,27 +3,27 @@
 
 This file is part of F# Bitcoin.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files 
-(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, 
-copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *)
 
 (**
 # Checks
 
-Some of the validation checks are cheap and some are expensive to perform. A block or a transaction passes if it passes all the checks. 
+Some of the validation checks are cheap and some are expensive to perform. A block or a transaction passes if it passes all the checks.
 For performance reasons, it's better to fail fast, i.e if the block fails a cheap test and an expensive one, it is better to check the
 fast one first and avoid doing the expensive check. But alas, it is not always possible to do so. Checks are of several categories:
 
-- parsing checks. If the block got here, it already passed these. 
+- parsing checks. If the block got here, it already passed these.
 - single metadata checks. For instance, the hash must be below the target. It's a check that doesn't involve other blocks
 - multi metadata checks. These checks are more expensive because more than one block participate. For example, the previous block hash must
 match, or the timestamp must be no sooner than the median of the previous 11 blocks
@@ -42,7 +42,7 @@ open System.Reactive
 open System.Reactive.Linq
 open System.Reactive.Disposables
 open System.Threading.Tasks
-open FSharp.Control.Observable
+// open FSharp.Control.Observable
 open FSharpx
 open FSharpx.Collections
 open FSharpx.Choice
@@ -66,15 +66,15 @@ let difficultyReadjustmentInterval = 2016
 let targetElapsed = 600u * uint32 difficultyReadjustmentInterval
 let maxCheckSigOpsCount = 20000
 
-(** 
-## Misc functions 
+(**
+## Misc functions
 
 Create a lazy sequence of block headers backwards from the one given to the genesis block. Because it
 is lazily evaluated, it is very rarely read all the way.
 *)
 let chainFromTip (tip: BlockHeader): seq<BlockHeader> =
     Seq.unfold (
-        fun (header: BlockHeader) -> 
+        fun (header: BlockHeader) ->
             if header.Hash = zeroHash then
                 None
             else
@@ -93,7 +93,7 @@ let bits (target: bigint) =
     let targetBytes = target.ToByteArray()
     let mantissa = targetBytes.TakeLast 4 |> Seq.toArray
     let exp = targetBytes.Length
-    let p1 = BitConverter.ToInt32(mantissa, 0) 
+    let p1 = BitConverter.ToInt32(mantissa, 0)
     (p1 >>> 8) ||| (exp <<< 24)
 
 let maxTarget = target 0x207fFFFF // This is the max target on the main net
@@ -112,14 +112,14 @@ let isCoinBase (tx: Tx) =
     tx.TxIns.Length = 1 && hashCompare.Equals(tx.TxIns.[0].PrevOutPoint.Hash, zeroHash) && tx.TxIns.[0].PrevOutPoint.Index = -1
 
 (** Compute the merkle root of a bunch of hashes *)
-let rec computeMerkleRoot (hashes: byte[][]) = 
-    if hashes.Length = 1 
+let rec computeMerkleRoot (hashes: byte[][]) =
+    if hashes.Length = 1
         then hashes.[0]
     else
-        let hs = 
-            if hashes.Length % 2 = 0 
+        let hs =
+            if hashes.Length % 2 = 0
             then hashes
-            else 
+            else
                 [hashes; [|hashes.Last()|]] |> Array.concat
         computeMerkleRoot
             (hs.Batch(2) |> Seq.map(fun x ->
@@ -136,14 +136,14 @@ let totalIn (tx: Tx) =
             yield utxo |> Option.map(fun utxo -> utxo.TxOut.Value)
         } |> Seq.toList
     |> Option.sequence |> Option.map Seq.sum
-let totalOut (tx: Tx) = 
+let totalOut (tx: Tx) =
     seq {
         for txOut in tx.TxOuts do
             yield txOut.Value
         } |> Seq.sum
 
 (** Check that the timestamp of the block is in the proper range *)
-let checkTimestamp (header: BlockHeader) = 
+let checkTimestamp (header: BlockHeader) =
     maybe {
         let prevBlockTimestamps = chainFromTip header |> Seq.skip 1 |> Seq.truncate minTimestampBlocks |> Seq.toArray |> Array.sortBy (fun h -> h.Timestamp)
         let median = prevBlockTimestamps.[prevBlockTimestamps.Length / 2]
@@ -152,10 +152,10 @@ let checkTimestamp (header: BlockHeader) =
     }
 
 let between x min max = if x < min then min elif x > max then max else x
-(** Check that the difficulty/target is correct. Either it's the same as the previous block or if it's time to readjust then it must be 
+(** Check that the difficulty/target is correct. Either it's the same as the previous block or if it's time to readjust then it must be
 so that the previous 2016 blocks would have taken 10 minutes in average to produce. *)
 let checkBits (header: BlockHeader) =
-    let testResult = 
+    let testResult =
         if header.Height > 0 && header.Height % difficultyReadjustmentInterval = 0
         then
             let chain = chainFromTip header
@@ -175,7 +175,7 @@ let checkBits (header: BlockHeader) =
 (**
 Check that the content of the blockheader is valid
 *)
-let checkBlockHeader (header: BlockHeader) = 
+let checkBlockHeader (header: BlockHeader) =
     logger.InfoF "Checking block header #%d" (header.Height)
     let hashInt = header.Hash |> fun x -> bigint (Array.append x [|0uy|]) // append 0 to make sure the result is > 0
     maybe {
@@ -209,11 +209,11 @@ let checkBlockTxs (utxoAccessor: IUTXOAccessor) (block: Block) =
         do! (coinBaseScriptlen >= 2 && coinBaseScriptlen <= 100) |> errorIfFalse "coinbase script must be between 2 and 100 bytes"
 
         let scriptRuntime = new Script.ScriptRuntime(fun a _ -> a)
-        let checkSigOpsCount = 
+        let checkSigOpsCount =
             block.Txs |> Seq.mapi (fun i tx ->
-                let inputScripts = 
-                    if i <> 0 
-                    then 
+                let inputScripts =
+                    if i <> 0
+                    then
                         tx.TxIns |> Seq.map (fun txIn ->
                             let utxo = utxoAccessor.GetUTXO txIn.PrevOutPoint
                             utxo |> Option.bind(fun utxo ->
@@ -225,7 +225,7 @@ let checkBlockTxs (utxoAccessor: IUTXOAccessor) (block: Block) =
                             ) |> Seq.toArray
                     else Array.empty
                 let outputScripts = tx.TxOuts |> Array.map (fun x -> x.Script)
-                [inputScripts; outputScripts] 
+                [inputScripts; outputScripts]
                     |> Array.concat
                     |> Seq.map (fun script -> scriptRuntime.CheckSigCount script)
                     |> Seq.sum
@@ -238,7 +238,7 @@ let checkBlockTxs (utxoAccessor: IUTXOAccessor) (block: Block) =
 
 (** Check the tx and update the UTXO set. These are the worst and also the very last checks.
 
-I must use a temporary UTXO accessor for this because if any transaction of the block fails then the entire 
+I must use a temporary UTXO accessor for this because if any transaction of the block fails then the entire
 block is rejected and all the modification of the UTXO set must be rolled back.
 *)
 let updateBlockUTXO (utxoAccessor: IUTXOAccessor) (block: Block) =
@@ -247,9 +247,9 @@ let updateBlockUTXO (utxoAccessor: IUTXOAccessor) (block: Block) =
 
     maybe {
         let processUTXO = processUTXO utxoAccessor undoWriter
-        let! fees = 
+        let! fees =
             block.Txs |> Array.mapi (fun i tx ->
-                if i <> 0 
+                if i <> 0
                     then checkScript utxoAccessor tx
                     else Some()
                 |> Option.bind(fun _ -> processUTXO (i=0) block.Header.Height tx)

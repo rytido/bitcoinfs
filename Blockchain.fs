@@ -3,16 +3,16 @@
 
 This file is part of F# Bitcoin.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files 
-(the "Software"), to deal in the Software without restriction, including without limitation the rights to use, 
-copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *)
 
@@ -30,19 +30,19 @@ When he synchronizes (catches up) with a peer, Bob follows the checklist:
 
 - get headers (async). Bob gives his most recent block header (the tip) and asks the peer if he has any blocks after that one.
 If the peer says no, Bob is done. If he gets some blocks, Bob will connect them with the ones he knows already. If they can't be connected because he
-never heard the block that supposedly precedes the chain that he received, Bob concludes that the chain is orphaned and not of concern to him. If that chain 
+never heard the block that supposedly precedes the chain that he received, Bob concludes that the chain is orphaned and not of concern to him. If that chain
 eventually gets connected, he will be made aware of it when he get the connecting block.
 - extend the new chain if possible. Bob consults his database to see if he has received headers that follows the new chain because, at times, blocks are given out of order
 - compute heights. Now that the block connects somewhere to a known block, Bob can update the heights of all the blocks that he received. Starting from the previous block
 that he knows about, Bob increments the height and assigns the result to the first block of the new chain and so on so forth.
 - store headers into db. Bob takes these headers and writes them to his database. They will never be removed from there.
-- compare POW (Proof of Work). First he finds out the lowest common ancestor between his best chain and the chain he received. If the chain he received extends his current chain, it's the best case because the LCA will be his tip 
+- compare POW (Proof of Work). First he finds out the lowest common ancestor between his best chain and the chain he received. If the chain he received extends his current chain, it's the best case because the LCA will be his tip
 but it doesn't matter to Bob. It works the same either way.
 He compares the work from both chains. Knowing that both chains are equal from the LCA to the genesis block, Bob only has to compare the POW between the LCA and both tips. If the new chain
 is no better than the old one, there is no need to continue.
 - download blocks (async). Bob looks at the blocks he already has downloaded and ignores the one he has downloaded already. Bob splits the rest evenly in several groups
-and asks his peers to download them for him. This task is done in parallel while he sits patiently. During that time, if a download fails the blocks get reassigned to a different peer. 
-So, eventually Bob gets his blocks or the retry limit got reached. In the later case, Bob gives up and will try another time. The catchup fails. 
+and asks his peers to download them for him. This task is done in parallel while he sits patiently. During that time, if a download fails the blocks get reassigned to a different peer.
+So, eventually Bob gets his blocks or the retry limit got reached. In the later case, Bob gives up and will try another time. The catchup fails.
 - rollback utxo to LCA beween main and new fork. However, if Bob got his blocks he now has to determine how many of these blocks are good. He creates a new in memory UTXO set on top of the existing db
 and rolls back all the blocks back to the LCA. Then he dilligently checks the blocks of the new chain and applies their transactions until the end or the first failure. If he made it to the end, the new chain
 was all good. If not, he has a partially good new chain.
@@ -72,7 +72,7 @@ open System.Reactive.Disposables
 open System.Reactive.Threading.Tasks
 open System.Reactive.Concurrency
 open System.Threading.Tasks
-open FSharp.Control.Observable
+// open FSharp.Control.Observable
 open FSharpx
 open FSharpx.Collections
 open FSharpx.Choice
@@ -98,7 +98,7 @@ let fnBlockchain = fun () -> chainFromTip tip
 (**
 And in code:
 *)
-let calculateChainHeights(newHeaders: BlockHeaderList): BlockChainFragment option = 
+let calculateChainHeights(newHeaders: BlockHeaderList): BlockChainFragment option =
     newHeaders |> Seq.windowed 2 |> Seq.iter (fun pair ->
         let [prev; cur] = pair |> Seq.toList
         prev.NextHash <- cur.Hash
@@ -107,10 +107,10 @@ let calculateChainHeights(newHeaders: BlockHeaderList): BlockChainFragment optio
     let hashOfPrevNewHeader = Seq.tryPick Some newHeaders |> Option.map (fun bh -> bh.PrevHash) |?| tip.Hash
     let prevNewHeader = Db.readHeader hashOfPrevNewHeader
     if prevNewHeader.Hash = zeroHash
-    then 
+    then
         logger.DebugF "Orphaned branch %A" newHeaders
         None
-    else 
+    else
         newHeaders |> Seq.iteri (fun i newHeader -> newHeader.Height <- prevNewHeader.Height + i + 1)
         (prevNewHeader :: newHeaders ) |> List.rev |> Some
 
@@ -118,7 +118,7 @@ let calculateChainHeights(newHeaders: BlockHeaderList): BlockChainFragment optio
 To calculate the lowest common ancestor, I use the fact that I know the height of the nodes. It makes
 the determination much simpler. I find the minimum height between the two nodes and move from the deeper
 node up until I reach a node that has the same height. Now I'm working with two nodes that are at the same height
-but potentially in different branches of the tree. I compare the two nodes and move up from both nodes simultaneously 
+but potentially in different branches of the tree. I compare the two nodes and move up from both nodes simultaneously
 until I reach the same ancestor.
 *)
 let calculateLowestCommonAncestor (newChain: BlockChainFragment) =
@@ -139,16 +139,16 @@ let isBetter (oldChain: BlockChainFragment) (newChain: BlockChainFragment) = get
 Fetch a set of nodes asynchrounously from the current set of peers. The function retries until it reaches the maximum
 number of attempts. Between retries, only the failed downloads are retried. For instance, if a peer provides 9/10 blocks
 only the 1/10 missing block is retried. Furthermore, after a failure the peer gets a malus (`Bad`) and can end up being removed.
-In that case, the application will use a different peer. In the background, the tracker will eventually replace the bad peer too. 
+In that case, the application will use a different peer. In the background, the tracker will eventually replace the bad peer too.
 That takes place independently from Bob.
 *)
 type BlockMap = Map<byte[], BlockHeader>
 // Get a list of blocks
-let rec asyncGetBlocks (headers: BlockHeader list) (attempsRemaining: int) = 
+let rec asyncGetBlocks (headers: BlockHeader list) (attempsRemaining: int) =
     // After a block is received, check that it's among the blocks we are waiting for
     // If so, update the height and store it on file
     // Then remove it from the list of pending blocks
-    let updatePendingBlocks (pendingBlocks: BlockMap) (block: Block, payload: byte[]) = 
+    let updatePendingBlocks (pendingBlocks: BlockMap) (block: Block, payload: byte[]) =
         logger.DebugF "Block received -> %s" (hashToHex block.Header.Hash)
         pendingBlocks.TryFind(block.Header.Hash) |> Option.iter(fun header ->
             block.Header.Height <- header.Height
@@ -183,23 +183,23 @@ let rec asyncGetBlocks (headers: BlockHeader list) (attempsRemaining: int) =
             raise (new IOException "GetBlocks failed") // TODO: Delete block files
     }
 
-let downloadBlocks (newChain: BlockChainFragment) = 
+let downloadBlocks (newChain: BlockChainFragment) =
     // Fetching blocks from peers
     let h = newChain |> List.filter(fun bh -> not (hasBlock bh)) // Filter the blocks that we already have
     // Spread blocks around 'evenly' accross connected peers
-    let c = max Tracker.connectionCount 1 
+    let c = max Tracker.connectionCount 1
     let batchSize = h.Count() / c
     let getdataBatchSize = max (min batchSize maxGetdataBatchSize) minGetdataBatchSize
 
     // Create an array of async work to fetch blocks
     let hashes = h |> List.toArray
-    let getblocks = 
-        seq { 
+    let getblocks =
+        seq {
         for batch in hashes.Batch(getdataBatchSize) do
             yield asyncGetBlocks(batch |> Seq.toList) settings.MaxGetblockRetry }
         |> Seq.toArray
     Async.Parallel getblocks |> Async.Ignore // execute fetch blocks in parallel - park until finished
-        
+
 
 (**
 Undo the blockchain up to a certain point
@@ -230,7 +230,7 @@ let checkBlock (utxoAccessor: IUTXOAccessor) (p: BlockHeader) (blocks: BlockHead
 
 let chainTo (blockchain: seq<BlockHeader>) (stop: BlockHeader) = blockchain |> Seq.takeWhile (fun bh -> bh.Height <> stop.Height) |> Seq.toList
 
-let updateIsMain (fragment: BlockChainFragment) (isMain: bool) = 
+let updateIsMain (fragment: BlockChainFragment) (isMain: bool) =
     fragment |> List.iter (fun bh ->
         bh.IsMain <- isMain
         Db.writeHeaders bh
@@ -239,8 +239,8 @@ let updateIsMain (fragment: BlockChainFragment) (isMain: bool) =
 (**
 ## The catchup workflow
 *)
-let catchup (peer: IPeer) = 
-    let getHeaders(): Async<Headers> = 
+let catchup (peer: IPeer) =
+    let getHeaders(): Async<Headers> =
         async {
             use d = Disposable.Create(fun () -> peer.Ready())
             let blockchain = fnBlockchain() // Get current blockchain
@@ -251,7 +251,7 @@ let catchup (peer: IPeer) =
             return getHeadersResult
         }
 
-    let rec catchupImpl() = 
+    let rec catchupImpl() =
         try
             let headersMessage = getHeaders() |> Async.RunSynchronously
             let currentHeight = tip.Height
@@ -278,7 +278,7 @@ let catchup (peer: IPeer) =
                             let lastValidBlock =
                                 match lastValidBlockChoice with
                                 | Choice1Of2 bh -> bh
-                                | Choice2Of2 (bh, invalidBlock) -> 
+                                | Choice2Of2 (bh, invalidBlock) ->
                                     deleteBlock invalidBlock
                                     bh
                             let validNewBlockchain = newBlockchain |> List.skipWhile(fun bh -> bh.Hash <> lastValidBlock.Hash)
@@ -298,19 +298,19 @@ let catchup (peer: IPeer) =
                                 catchupImpl()
                         )
                 )
-            with 
+            with
             | ex -> logger.DebugF "%A" ex
 
     catchupImpl()
 
-let getBlockchainUpTo (hashes: byte[] list) (hashStop: byte[]) (count: int) = 
+let getBlockchainUpTo (hashes: byte[] list) (hashStop: byte[]) (count: int) =
     let startHeader =
-        hashes 
+        hashes
         |> Seq.map (fun hash -> Db.readHeader hash)
         |> Seq.tryFind (fun bh -> bh.IsMain
         ) |?| genesisHeader
 
-    iterate (fun bh -> Db.readHeader bh.NextHash) startHeader |> Seq.truncate (count+1) |> Seq.takeWhile (fun bh -> bh.Hash <> hashStop) |> Seq.tail |> Seq.toList 
+    iterate (fun bh -> Db.readHeader bh.NextHash) startHeader |> Seq.truncate (count+1) |> Seq.takeWhile (fun bh -> bh.Hash <> hashStop) |> Seq.tail |> Seq.toList
 
 (**
 ## Command handler
@@ -326,16 +326,16 @@ pings and then waits for the pong. Originally, ping/pong was directly handled by
 and the test driver would proceed before catchup even started. By putting ping here, the request gets queued until Bob is
 finished with catchup.
 *)
-let processCommand command = 
+let processCommand command =
     match command with
-    | Catchup (peer, hash) -> 
+    | Catchup (peer, hash) ->
         logger.DebugF "Catchup started for peer %A" peer
         let blockchain = fnBlockchain()
         if hash = null || (Db.readHeader hash).Hash = zeroHash || not (hasBlock (Db.readHeader hash)) then
             catchup peer
         logger.DebugF "Catchup completed for peer %A" peer
     | DownloadBlocks (invs, peer) ->
-        let downloadResults = 
+        let downloadResults =
             invs |> List.map (fun inv ->
                 let bh = Db.readHeader inv.Hash
                 let block = Choice.protect loadBlock bh
