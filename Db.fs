@@ -460,21 +460,21 @@ type LevelDBUTXOAccessor(db: DB, wallet: Wallet, txTableAccessor: TxTableAccesso
     let deleteUTXO (outpoint: OutPoint) =
         let k = outpoint.ToByteArray()
         maybe {
-            let! v = Option.ofNull (db.Get(ro, k))
-            let utxo = ParseByteArray v UTXO.Parse
+            let! v = Option.ofNull (db.Get(ro, Base64.ToBase64String k))
+            let utxo = ParseByteArray (Base64.Decode v) UTXO.Parse
             removeIfInWallet txTableAccessor wallet outpoint utxo
         } |> ignore
-        db.Delete(wo, k)
+        db.Delete(wo, k.ToString())
     let addUTXO (outpoint: OutPoint) (utxo: UTXO) =
         let k = outpoint.ToByteArray()
         let v = utxo.ToByteArray()
         addIfInWallet txTableAccessor wallet outpoint utxo
-        db.Put(wo, k, v)
+        db.Put(wo, k.ToString(), v.ToString())
     let getUTXO (outpoint: OutPoint) =
         let k = outpoint.ToByteArray()
-        let v = db.Get(ro, k)
+        let v = db.Get(ro, Base64.ToBase64String k)
         if v <> null
-        then Some(ParseByteArray v UTXO.Parse)
+        then Some(ParseByteArray (Base64.Decode v) UTXO.Parse)
         else
             None
 
@@ -483,13 +483,13 @@ type LevelDBUTXOAccessor(db: DB, wallet: Wallet, txTableAccessor: TxTableAccesso
     // It eliminates the need to keep an additional counter
     let getCount (txHash: byte[]) =
         let cursor = new Iterator(db, ro)
-        cursor.Seek(txHash)
+        cursor.Seek(txHash.ToString())
         let mutable count = 0
         let rec getCountInner (count: int): int =
             if cursor.IsValid then
                 let k = cursor.Key
                 let hash = k.[0..txHash.Length-1] // first part of the key is the txhash
-                if hash = txHash
+                if hash = txHash.ToString()
                 then
                     cursor.Next()
                     getCountInner (count+1)
@@ -525,8 +525,8 @@ let scanUTXO () =
         while cursor.IsValid do
             let k = cursor.Key
             let v = cursor.Value
-            let outpoint = ParseByteArray k OutPoint.Parse
-            let utxo = ParseByteArray v UTXO.Parse
+            let outpoint = ParseByteArray (Base64.Decode k) OutPoint.Parse
+            let utxo = ParseByteArray (Base64.Decode v) UTXO.Parse
             creditToWallet outpoint utxo
             cursor.Next()
         )
@@ -689,20 +689,21 @@ let undoBlock (utxoAccessor: IUTXOAccessor) (bh: BlockHeader) =
 
 let pruneBlocks (minHeight: int) =
     let blockRegex = "\d+/(\d+)$"
-    let rec pruneBlock (path: String) =
-        if path.Replace ('\\', '/') |> Regex.tryMatch blockRegex |> Option.map (fun m ->
-            let height = int m.GroupValues.[0]
-            height < minHeight
-            ) |?| false
-        then
-            logger2 "Deleting" path
-            let dir = new DirectoryInfo(path)
-            dir.Delete true
-            if dir.Parent.GetDirectories() |> Array.isEmpty then dir.Parent.Delete()
-        else
-            let dirs = Directory.GetDirectories(path)
-            for dir in dirs do
-                pruneBlock dir
+    // INCORRECT
+    //let rec pruneBlock (path: String) =
+        //if path.Replace ('\\', '/') |> Regex.tryMatch blockRegex |> Option.map (fun m ->
+        //    let height = int m.GroupValues.[0]
+        //    height < minHeight
+        //    ) |?| false
+        //then
+        //    logger2 "Deleting" path
+        //    let dir = new DirectoryInfo(path)
+        //    dir.Delete true
+        //    if dir.Parent.GetDirectories() |> Array.isEmpty then dir.Parent.Delete()
+        //else
+        //    let dirs = Directory.GetDirectories(path)
+        //    for dir in dirs do
+        //        pruneBlock dir
 
-    pruneBlock settings.BlocksDir
-
+    //pruneBlock settings.BlocksDir
+    ()
