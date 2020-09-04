@@ -3,7 +3,21 @@
 An alternative full node bitcoin implementation in F#. The [source code][2] is on GitHub and this documentation
 was generated directly from the code.
 
-## Introduction
+## Notice
+
+This is a fork of <https://github.com/bitcoinfs/bitcoinfs>
+
+## Setup
+
+```bash
+apt install sqlite3
+cd data
+sqlite3 bitcoin.db
+```
+
+Run sql commands from `db.sql`
+
+## Original Introduction
 
 This project is under development and currently in alpha stage. Generally speaking, writing
 a fully compliant bitcoin node is extremely hard - some think impossible. The Bitcoin project
@@ -52,7 +66,3 @@ MIT
 [1]: https://github.com/TheBlueMatt/test-scripts
 [2]: https://github.com/bitcoinfs/bitcoinfs
 [3]: http://bitcoinfs.github.io/bitcoinfs
-
-## Setup
-
-`apt install sqlite3`
