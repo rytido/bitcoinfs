@@ -9,13 +9,27 @@ This is a fork of <https://github.com/bitcoinfs/bitcoinfs>
 
 ## Setup
 
+### sqlite3
+
 ```bash
-apt install sqlite3
+sudo apt install sqlite3
 cd data
 sqlite3 bitcoin.db
 ```
 
 Run sql commands from `db.sql`
+
+### leveldb
+
+```bash
+sudo apt install cmake
+wget https://github.com/google/leveldb/archive/1.22.tar.gz
+tar xvf leveldb-1.22.tar.gz
+rm leveldb-1.22.tar.gz
+cd leveldb-1.22
+mkdir -p build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
+```
 
 ## Original Introduction
 
