@@ -25,8 +25,8 @@ type Settings = {
 }
 
 let settings = {
-    BaseDir = "/home/bitcoin"
-    BlocksDir = "/home/bitcoin/blocks"
+    BaseDir = "data"
+    BlocksDir = "data/blocks"
     ConnectTimeout = 5.
     CommandTimeout = 15.
     HandshakeTimeout = 10.
