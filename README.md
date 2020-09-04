@@ -22,6 +22,12 @@ Run sql commands from `db.sql`
 ### leveldb
 
 ```bash
+sudo apt install libleveldb-dev
+```
+
+This is how to partially do it from source:
+
+```bash
 sudo apt install cmake
 wget https://github.com/google/leveldb/archive/1.22.tar.gz
 tar xvf leveldb-1.22.tar.gz
@@ -30,6 +36,8 @@ cd leveldb-1.22
 mkdir -p build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 ```
+
+However, it does not make the necessary references available, and I'm dumb and haven't figured it out yet.
 
 ## Original Introduction
 
