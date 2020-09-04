@@ -59,28 +59,15 @@ module Blockchain
 
 (*** hide ***)
 open System
-open System.Net
-open System.Net.Sockets
-open System.Collections.Generic
 open System.Linq
 open System.IO
-open System.Text
-open System.Reactive
 open System.Reactive.Linq
-open System.Reactive.Subjects
 open System.Reactive.Disposables
 open System.Reactive.Threading.Tasks
 open System.Reactive.Concurrency
-open System.Threading.Tasks
-// open FSharp.Control.Observable
 open FSharpx
 open FSharpx.Collections
-open FSharpx.Choice
-open FSharpx.Validation
-open FSharpx.Option
 open ExtCore.Control
-open Org.BouncyCastle.Utilities.Encoders
-open NodaTime
 open MoreLinq
 open Protocol
 open Tracker

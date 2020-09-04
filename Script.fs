@@ -56,13 +56,6 @@ open System.Linq
 open System.IO
 open MoreLinq
 open FSharpx
-open FSharpx.Option
-open Org.BouncyCastle.Utilities.Encoders
-open Org.BouncyCastle.Crypto.Digests
-open Org.BouncyCastle.Crypto.Parameters
-open Org.BouncyCastle.Asn1
-open Secp256k1Net
-open Org.BouncyCastle.Crypto.Signers
 open Protocol
 open Config
 

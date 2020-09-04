@@ -32,7 +32,6 @@ module Peer
 
 (*** hide ***)
 open System
-open System.IO
 open System.Collections
 open System.Collections.Generic
 open System.Linq
@@ -43,13 +42,7 @@ open System.Reactive.Subjects
 open System.Reactive.Linq
 open System.Reactive.Disposables
 open System.Reactive.Concurrency
-open System.Reactive.Threading.Tasks
-open System.Threading
 open System.Threading.Tasks
-//open FSharp.Control.Observable
-open Org.BouncyCastle.Utilities.Encoders
-open FSharpx.Choice
-open FSharpx.Validation
 open NodaTime
 open Protocol
 open Db
@@ -227,7 +220,7 @@ Check a transaction against the bloom filter
 let checkTxAgainstBloomFilter (bloomFilter: BloomFilter) (updateMode: BloomFilterUpdate) (tx: Tx) =
     let matchScript (script: byte[]) = // Try to match a script with the filter
         let data = scriptRuntime.GetData script // The filter matches only on the data part of the script
-        data |> Array.exists (fun d -> bloomFilter.Check d) // Match is any data item is a match
+        data |> Array.exists bloomFilter.Check // Match is any data item is a match
     let addOutpoint (txHash: byte[]) (iTxOut: int) = // Update the filter by adding the txOut outpoint
         let outpoint = new OutPoint(txHash, iTxOut)
         bloomFilter.Add (outpoint.ToByteArray())

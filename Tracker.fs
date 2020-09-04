@@ -26,16 +26,12 @@ open System
 open System.Net
 open System.Net.Sockets
 open System.Collections.Generic
-open System.IO
-open System.Text
-open System.Threading
 open System.Reactive.Linq
 open System.Reactive.Subjects
 open System.Reactive.Disposables
 open System.Reactive.Concurrency
 open System.Threading.Tasks
 open FSharpx.Option
-open FSharpx.Validation
 open Protocol
 open Peer
 open Config

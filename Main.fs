@@ -4,30 +4,16 @@
 module Main
 
 (*** hide ***)
-open System
 open System.IO
 open System.Net
 open System.Threading
-open System.Collections.Generic
-//open System.Data.Linq
-//open System.Data.SQLite
-open System.Linq
-open System.Reactive
-open System.Reactive.Linq
-open System.Reactive.Subjects
 open log4net
-open Org.BouncyCastle.Crypto
 open Org.BouncyCastle.Utilities.Encoders
 open FSharpx
 open FSharpx.Collections
-open FSharpx.Choice
 open Protocol
 open Peer
-open Tracker
-open LevelDB
 open Checks
-open Blockchain
-open Wallet
 open Db
 open Script
 open Config

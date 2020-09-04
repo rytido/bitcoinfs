@@ -35,14 +35,12 @@ module Checks
 (*** hide ***)
 open System
 open System.Linq
-// open FSharp.Control.Observable
 open FSharpx
 open FSharpx.Collections
 open NodaTime
 open MoreLinq
 open Protocol
 open Db
-open Peer
 open Mempool
 open Config
 

@@ -23,9 +23,7 @@ module Wallet
 
 (*** hide ***)
 open System
-open System.Collections
 open System.Text
-open System.Linq
 open System.IO
 open System.Net
 open Org.BouncyCastle.Crypto.Digests
@@ -33,14 +31,10 @@ open Org.BouncyCastle.Crypto.Macs
 open Org.BouncyCastle.Crypto.Parameters
 open Org.BouncyCastle.Math.EC
 open Org.BouncyCastle.Utilities.Encoders
-open Db
 open Protocol
-open Murmur
-open Script
 
 let secp256k1Curve = Org.BouncyCastle.Asn1.Sec.SecNamedCurves.GetByName("secp256k1")
 let ecDomain = ECDomainParameters(secp256k1Curve.Curve, secp256k1Curve.G, secp256k1Curve.N)
-
 
 let createBigInt (bytes: byte[]) = Org.BouncyCastle.Math.BigInteger(1, bytes)
 

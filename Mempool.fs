@@ -31,8 +31,6 @@ open System.Reactive.Linq
 open System.Reactive.Concurrency
 open FSharpx
 open FSharpx.Collections
-//open FSharpx.Choice
-//open FSharpx.Validation
 open Protocol
 open Db
 open Peer
