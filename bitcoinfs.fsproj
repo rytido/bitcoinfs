@@ -25,7 +25,6 @@
     <PackageReference Include="ExtCore" Version="0.8.46" />
     <PackageReference Include="FSharpx.Extras" Version="2.5.0" />
     <PackageReference Include="leveldb-sharp" Version="1.0.0" />
-    <PackageReference Include="log4net" Version="2.0.9" />
     <PackageReference Include="morelinq" Version="3.3.2" />
     <PackageReference Include="murmurhash" Version="1.0.3" />
     <PackageReference Include="NodaTime" Version="3.0.0" />

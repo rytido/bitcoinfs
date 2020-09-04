@@ -48,7 +48,6 @@ open FSharpx.Collections
 open FSharpx.Choice
 open FSharpx.Option
 open NodaTime
-open log4net
 open Org.BouncyCastle.Utilities.Encoders
 open Config
 open Wiry.Base32
@@ -93,17 +92,6 @@ let revFind (arr: byte[]) (f: byte -> bool) =
         else
             rf (i-1)
     rf (arr.Length-1)
-
-(**
-Extends the log4net logger with F# printf style. The later checks the format
-string against the type of the effective parameters
-*)
-// let logger = LogManager.GetLogger("bitcoinfs")
-type ILog with
-    member x.DebugF format = Printf.ksprintf (x.Debug) format
-    member x.InfoF format = Printf.ksprintf (x.Info) format
-    member x.ErrorF format = Printf.ksprintf (x.Error) format
-    member x.FatalF format = Printf.ksprintf (x.Fatal) format
 
 (**
 F# has structural comparison of arrays and you can directly compare them with =.

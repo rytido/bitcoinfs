@@ -7,7 +7,6 @@ module Main
 open System.IO
 open System.Net
 open System.Threading
-open log4net
 open Org.BouncyCastle.Utilities.Encoders
 open FSharpx
 open FSharpx.Collections
