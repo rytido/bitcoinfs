@@ -25,15 +25,11 @@ open System.Collections
 open System.Collections.Generic
 open System.Linq
 open System.Net
-open System.Net.Sockets
-open System.Text.RegularExpressions
 open Murmur
 open Protocol
 open Org.BouncyCastle.Utilities.Encoders
 open FSharpx
 open FSharpx.Collections
-open FSharpx.Choice
-open NodaTime
 open System.Data
 open System.Data.SQLite
 open LevelDB
