@@ -101,7 +101,10 @@ And in code:
 *)
 let calculateChainHeights(newHeaders: BlockHeaderList): BlockChainFragment option =
     newHeaders |> Seq.windowed 2 |> Seq.iter (fun pair ->
-        let [prev; cur] = pair |> Seq.toList
+        // let [prev; cur;] = pair |> Seq.toList // this gives incomplete expression warning
+        let pairlist = pair |> Seq.toList
+        let prev = pairlist.[0]
+        let cur = pairlist.[1]
         prev.NextHash <- cur.Hash
     ) // Link header to next - headers are already linked by prev hash
     let blockchain = fnBlockchain()
@@ -186,7 +189,8 @@ let rec asyncGetBlocks (headers: BlockHeader list) (attempsRemaining: int) =
 
 let downloadBlocks (newChain: BlockChainFragment) =
     // Fetching blocks from peers
-    let h = newChain |> List.filter(fun bh -> not (hasBlock bh)) // Filter the blocks that we already have
+    // Original filter: (fun bh -> not (hasBlock bh))
+    let h = newChain |> List.filter (hasBlock >> not) // Filter the blocks that we already have
     // Spread blocks around 'evenly' accross connected peers
     let c = max Tracker.connectionCount 1
     let batchSize = h.Count() / c
@@ -257,7 +261,7 @@ let catchup (peer: IPeer) =
             let headersMessage = getHeaders() |> Async.RunSynchronously
             let currentHeight = tip.Height
 
-            if headersMessage <> null && not headersMessage.Headers.IsEmpty then
+            if isNotNull headersMessage && not headersMessage.Headers.IsEmpty then
                 let headers = headersMessage.Headers
                 let newBlockchainOpt = calculateChainHeights headers
                 newBlockchainOpt |> Option.filter (fun f -> f.Head.Height > currentHeight-10000) |> Option.iter (fun newBlockchainFrag -> // limit the size of a fork to 10000 blocks
@@ -307,11 +311,11 @@ let catchup (peer: IPeer) =
 let getBlockchainUpTo (hashes: byte[] list) (hashStop: byte[]) (count: int) =
     let startHeader =
         hashes
-        |> Seq.map (fun hash -> Db.readHeader hash)
+        |> Seq.map readHeader
         |> Seq.tryFind (fun bh -> bh.IsMain
         ) |?| genesisHeader
 
-    iterate (fun bh -> Db.readHeader bh.NextHash) startHeader |> Seq.truncate (count+1) |> Seq.takeWhile (fun bh -> bh.Hash <> hashStop) |> Seq.tail |> Seq.toList
+    iterate (fun bh -> readHeader bh.NextHash) startHeader |> Seq.truncate (count+1) |> Seq.takeWhile (fun bh -> bh.Hash <> hashStop) |> Seq.tail |> Seq.toList
 
 (**
 ## Command handler
@@ -332,37 +336,37 @@ let processCommand command =
     | Catchup (peer, hash) ->
         sprintf "Catchup started for peer %A" peer |> logger1
         let blockchain = fnBlockchain()
-        if hash = null || (Db.readHeader hash).Hash = zeroHash || not (hasBlock (Db.readHeader hash)) then
+        if isNull hash || (readHeader hash).Hash = zeroHash || not (hasBlock (readHeader hash)) then
             catchup peer
         sprintf "Catchup completed for peer %A" peer |> logger1
     | DownloadBlocks (invs, peer) ->
         let downloadResults =
             invs |> List.map (fun inv ->
-                let bh = Db.readHeader inv.Hash
+                let bh = readHeader inv.Hash
                 let block = Choice.protect loadBlock bh
                 block |> Choice.mapError (fun _ -> inv)
             )
-        downloadResults |> List.filter (fun x -> Choice.isResult x) |> List.iter (fun block -> peer.Send(new BitcoinMessage("block", block.Value().ToByteArray())))
-        let failedInv = downloadResults |> List.filter (fun x -> Choice.isError x) |> List.map (fun inv -> Choice.getError inv)
-        let notfound = new NotFound(failedInv)
+        downloadResults |> List.filter Choice.isResult |> List.iter (fun block -> peer.Send(new BitcoinMessage("block", block.Value().ToByteArray())))
+        let failedInv = downloadResults |> List.filter Choice.isError |> List.map Choice.getError
+        let notfound = NotFound(failedInv)
         if not failedInv.IsEmpty then peer.Send(new BitcoinMessage("notfound", notfound.ToByteArray()))
     | GetHeaders (gh, peer) ->
         try
             let reqBlockchain = getBlockchainUpTo gh.Hashes gh.HashStop 2000
             sprintf "Headers sent> %A" reqBlockchain |> logger1
-            let headers = new Headers(reqBlockchain)
+            let headers = Headers(reqBlockchain)
             peer.Send(new BitcoinMessage("headers", headers.ToByteArray()))
         with
             | e -> sprintf "Exception %A" e |> logger1
     | GetBlocks (gb, peer) ->
         try
             let reqBlockchain = getBlockchainUpTo gb.Hashes gb.HashStop 500
-            let inv = new InvVector(reqBlockchain |> List.map (fun bh -> InvEntry(blockInvType, bh.Hash)))
+            let inv = InvVector(reqBlockchain |> List.map (fun bh -> InvEntry(blockInvType, bh.Hash)))
             peer.Send(new BitcoinMessage("inv", inv.ToByteArray()))
         with
             | e -> sprintf "Exception %A" e |> logger1
     | Ping (ping, peer) ->
-        let pong = new Pong(ping.Nonce)
+        let pong = Pong(ping.Nonce)
         peer.Send(new BitcoinMessage("pong", pong.ToByteArray()))
 
 let blockchainStart() =

@@ -39,10 +39,10 @@ open Murmur
 open Script
 
 let secp256k1Curve = Org.BouncyCastle.Asn1.Sec.SecNamedCurves.GetByName("secp256k1")
-let ecDomain = new ECDomainParameters(secp256k1Curve.Curve, secp256k1Curve.G, secp256k1Curve.N)
+let ecDomain = ECDomainParameters(secp256k1Curve.Curve, secp256k1Curve.G, secp256k1Curve.N)
 
 
-let createBigInt (bytes: byte[]) = new Org.BouncyCastle.Math.BigInteger(1, bytes)
+let createBigInt (bytes: byte[]) = Org.BouncyCastle.Math.BigInteger(1, bytes)
 
 (**
 ## Utilities to work with addresses
@@ -69,7 +69,7 @@ let fromBase58 (base58: string) =
 
 let toBase58 (bytes: byte[]) =
     let bi = new bigint(bytes |> Array.rev)
-    let sb = new StringBuilder()
+    let sb = StringBuilder()
     Protocol.iterate (fun (bi: bigint) ->
             let (div, rem) = bigint.DivRem (bi, 58I)
             sb.Append(base58alphabet.[int rem]) |> ignore
@@ -107,9 +107,9 @@ let toAddress = hash160 >> (toBase58Check 0uy)
 [2]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 *)
 let hmacOf(chain: byte[])(fnChain: unit -> byte[]) =
-    let sha512 = new Sha512Digest()
-    let hmac = new HMac(sha512)
-    hmac.Init(new KeyParameter(chain))
+    let sha512 = Sha512Digest()
+    let hmac = HMac(sha512)
+    hmac.Init(KeyParameter(chain))
     let data = fnChain()
     hmac.BlockUpdate(data, 0, data.Length)
     let res = Array.zeroCreate 64
@@ -137,11 +137,11 @@ type BIP32PrivKeyExt(secret: Org.BouncyCastle.Math.BigInteger, chain: byte[]) =
                 ms.ToArray()
             )
         let childSecret = createBigInt(l).Add(secret).Mod(ecDomain.N)
-        new BIP32PrivKeyExt(childSecret, r)
+        BIP32PrivKeyExt(childSecret, r)
 
     member x.ToPublic() = toPub()
     member x.ToPrivChild(index: int) = toPrivChild index
-    member x.ToPublicExt() = new BIP32PublicExt(x.ToPublic(), chain)
+    member x.ToPublicExt() = BIP32PublicExt(x.ToPublic(), chain)
 
 and BIP32PublicExt(point: ECPoint, chain: byte[]) =
     let toPublicChild index =
@@ -156,7 +156,7 @@ and BIP32PublicExt(point: ECPoint, chain: byte[]) =
                 ms.ToArray()
             )
         let childPoint = ecDomain.G.Multiply(createBigInt(l)).Add(point)
-        new BIP32PublicExt(FpPoint(ecDomain.Curve, childPoint.XCoord, childPoint.YCoord, true), r)
+        BIP32PublicExt(FpPoint(ecDomain.Curve, childPoint.XCoord, childPoint.YCoord, true), r)
 
     override x.ToString() = sprintf "(%s,%s)" (point.GetEncoded() |> Hex.ToHexString) (chain |> Hex.ToHexString)
     member x.ToPublic() = point
@@ -164,7 +164,7 @@ and BIP32PublicExt(point: ECPoint, chain: byte[]) =
 
 let BIP32master (master: byte[]) =
      let (l, r) = hmacOf(Encoding.ASCII.GetBytes "Bitcoin seed") (fun () -> master)
-     new BIP32PrivKeyExt(new Org.BouncyCastle.Math.BigInteger(1, l), r)
+     BIP32PrivKeyExt(Org.BouncyCastle.Math.BigInteger(1, l), r)
 
 (**
 ## [Electrum][3] Wallet
@@ -180,7 +180,8 @@ type Electrum(mpub: byte[], group: int) =
         writer.Write(Encoding.ASCII.GetBytes prefix)
         writer.Write(mpub)
         ms.ToArray() |> dsha |> createBigInt
-    let masterPoint = ecDomain.Curve.CreatePoint(createBigInt(mpub.[0..31]), createBigInt(mpub.[32..]), true)
+    // let masterPoint = ecDomain.Curve.CreatePoint(createBigInt(mpub.[0..31]), createBigInt(mpub.[32..]), true)
+    let masterPoint = ecDomain.Curve.CreatePoint(createBigInt(mpub.[0..31]), createBigInt(mpub.[32..]))
 
     member x.Derive(index: int) = ecDomain.G.Multiply(deriveExp index).Add(masterPoint)
 
@@ -196,7 +197,7 @@ type Armory(chain: byte[]) =
         let pkeyUnc = FpPoint(ecDomain.Curve, point.XCoord, point.YCoord, false)
         let chainMod = dsha (pkeyUnc.GetEncoded())
         let chain2 =
-            Array.map2 (fun a b -> a ^^^ b)
+            Array.map2 (^^^) // (fun a b -> a ^^^ b)
                 chain chainMod
         let exp = createBigInt chain2
         point.Multiply exp
@@ -205,8 +206,8 @@ type Armory(chain: byte[]) =
 
 (*** hide ***)
 let electrumHashes (mpk: byte[]) (cReceive: int) (cChange: int) =
-    let electrumReceive = new Electrum(mpk, 0)
-    let electrumChange = new Electrum(mpk, 1)
+    let electrumReceive = Electrum(mpk, 0)
+    let electrumChange = Electrum(mpk, 1)
     let derive (electrumWallet: Electrum) (c: int) =
         seq {
             for i in 0..c-1 do
@@ -216,7 +217,7 @@ let electrumHashes (mpk: byte[]) (cReceive: int) (cChange: int) =
     [derive electrumReceive cReceive; derive electrumChange cChange] |> Seq.concat
 
 let armoryHashes (mpk: byte[]) (c: int) =
-    let armory = new Armory(mpk.[33..])
+    let armory = Armory(mpk.[33..])
     let addresses =
         Protocol.iterate (fun (pk: byte[]) ->
             (armory.Derive pk).GetEncoded()
@@ -225,7 +226,7 @@ let armoryHashes (mpk: byte[]) (c: int) =
     addresses |> Seq.skip 1 |> Seq.take c
 
 let bip32Hashes (mpk: byte[]) (chain: byte[]) (isReceived: bool) (c: int) =
-    let publicKeyExt = (new BIP32PublicExt(ecDomain.Curve.DecodePoint(mpk), chain)).ToPublicChild(if isReceived then 0 else 1)
+    let publicKeyExt = (BIP32PublicExt(ecDomain.Curve.DecodePoint(mpk), chain)).ToPublicChild(if isReceived then 0 else 1)
 
     seq {
         for i in 0..c-1 do

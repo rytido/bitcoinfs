@@ -81,7 +81,7 @@ in a handler.
 *)
 let mutable peerSlots = Map.empty<int, PeerSlot>
 
-exception InvalidTransition of TrackerPeerState * TrackerPeerState
+exception InvalidTransitionException of TrackerPeerState * TrackerPeerState
 
 (**
 Check that the transition is valid. This should never raise an exception. It is
@@ -95,7 +95,7 @@ let checkTransition oldState newState =
         (Busy, Ready) -> ignore()
     | other ->
         sprintf "Invalid transition from %A to %A" oldState newState |> logger1
-        raise (InvalidTransition other)
+        raise (InvalidTransitionException other)
 
 let changeState id newState =
     let oldState = peerSlots.[id].State
@@ -233,7 +233,7 @@ let getBlocks(blockHashes: seq<byte[]>): Task<IPeer * IObservable<Block * byte[]
     let invHashes =
         seq {
             for h in blockHashes do
-                yield new InvEntry(blockInvType, h) }
+                yield InvEntry(blockInvType, h) }
         |> Seq.toList
     let gd = new GetData(invHashes)
     let ts = new TaskCompletionSource<IPeer * IObservable<Block * byte[]>>()
@@ -249,7 +249,7 @@ let processBroadcast (m: BitcoinMessage) =
 (*** hide ***)
 let startTracker() =
     disposable.Add(trackerIncoming.ObserveOn(scheduler).Subscribe(processCommand))
-    disposable.Add(incomingMessage.Select(fun m -> BitcoinMessage m).Subscribe(trackerIncoming))
+    disposable.Add(incomingMessage.Select(BitcoinMessage).Subscribe(trackerIncoming)) // (fun m -> BitcoinMessage m)
     disposable.Add(Peer.addrTopic.ObserveOn(scheduler).Subscribe(processAddr))
     disposable.Add(broadcastToPeers.ObserveOn(scheduler).Subscribe(processBroadcast))
 

@@ -40,7 +40,7 @@ open Tracker
 open Config
 
 let mutable listTx = new List<byte[]>()
-let mutable mempool = new Dictionary<byte[], Tx>(new HashCompare())
+let mutable mempool = new Dictionary<byte[], Tx>(HashCompare())
 let mutable mempoolHeight = 0
 
 type NopUndoWriter() =
@@ -66,10 +66,10 @@ If they become permanent, `Commit` writes them to the base UTXO set otherwise th
 *)
 
 type MempoolUTXOAccessor(baseUTXO: IUTXOAccessor) =
-    let table = new Dictionary<OutPoint, UTXO>(new OutpointCompare())
+    let table = new Dictionary<OutPoint, UTXO>(OutpointCompare())
     // With LevelDB, I had iterators. A dictionary does not have a sorted iterator so I need to keep track
     // of the counts separately
-    let counts = new Dictionary<byte[], int>(new HashCompare())
+    let counts = new Dictionary<byte[], int>(HashCompare())
 
     let getOrDefault (hash: byte[]) =
         let (f, count) = counts.TryGetValue(hash) // I wish there was a GetOrDefault instead of a TryGetValue
@@ -87,7 +87,7 @@ type MempoolUTXOAccessor(baseUTXO: IUTXOAccessor) =
         let (f, utxo) = table.TryGetValue(outpoint)
         if f
         then
-            if utxo <> null
+            if isNotNull utxo
             then Some(utxo)
             else
                 sprintf "Cannot find outpoint %A" outpoint |> logger1
@@ -104,7 +104,7 @@ type MempoolUTXOAccessor(baseUTXO: IUTXOAccessor) =
         table |> Seq.iter(fun kv ->
             let outpoint = kv.Key
             let utxo = kv.Value
-            if utxo <> null
+            if isNotNull utxo
             then baseUTXO.AddUTXO(outpoint, utxo)
             else baseUTXO.DeleteUTXO(outpoint)
         )
@@ -133,7 +133,7 @@ let checkScript (utxoAccessor: IUTXOAccessor) (tx: Tx): Option<unit> =
     let x =
         tx.TxIns
             |> Seq.mapi (fun i txIn ->
-                let scriptEval = new Script.ScriptRuntime(Script.computeTxHash tx i)
+                let scriptEval = Script.ScriptRuntime(Script.computeTxHash tx i)
                 let outpoint = txIn.PrevOutPoint
                 let utxo = utxoAccessor.GetUTXO outpoint
                 utxo |> Option.map (fun utxo -> scriptEval.Verify(txIn.Script, utxo.TxOut.Script))
@@ -143,7 +143,7 @@ let checkScript (utxoAccessor: IUTXOAccessor) (tx: Tx): Option<unit> =
     (x.IsSome && x.Value) |> errorIfFalse "script failure"
 
 let mempoolAccessor = new MempoolUTXOAccessor(utxoAccessor)
-let nopWriter = new NopUndoWriter()
+let nopWriter = NopUndoWriter()
 
 (**
 Validating a tx in the pool will update the mempool UTXO set that is built on top of the confirmed UTXO. But for

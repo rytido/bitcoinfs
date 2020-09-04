@@ -49,3 +49,5 @@ let settings = {
 let logger1 s = Console.WriteLine("{0:s} {1}", DateTime.Now, s)
 let logger2 a b = Console.WriteLine("{0:s} {1} {2}", DateTime.Now, a, b)
 let logger3 a b c = Console.WriteLine("{0:s} {1} {2} {3}", DateTime.Now, a, b, c)
+
+let isNotNull x = x |> isNull |> not

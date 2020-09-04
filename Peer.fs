@@ -276,7 +276,10 @@ let buildMerkleBlock (bloomFilter: BloomFilter) (updateMode: BloomFilterUpdate) 
                 else merkletreeNodes @ [merkletreeNodes.Last()] // duplicate the last node if uneven
             let parentNodes = // Merge nodes two by two
                 (nodes |> Seq.ofList).Batch(2) |> Seq.map (fun x ->
-                    let [left; right] = x |> Seq.toList
+                    // let [left; right] = x |> Seq.toList
+                    let xlist = x |> Seq.toList
+                    let left = xlist.[0]
+                    let right = xlist.[1]
                     let includeChildren = left.Include || right.Include
                     {
                         Hash = dsha ([left.Hash; right.Hash] |> Array.concat) // DSHA on the concat of each hash
@@ -303,10 +306,10 @@ let buildMerkleBlock (bloomFilter: BloomFilter) (updateMode: BloomFilterUpdate) 
 
     depthFirstTraversal merkleTree
     let txHashes = hashes |> List.ofSeq
-    let flags = new BitArray(flags.ToArray()) // Pack the flags into a bitarray
+    let flags = BitArray(flags.ToArray()) // Pack the flags into a bitarray
     let flagsBytes: byte[] = Array.zeroCreate ((flags.Length-1)/8+1)
     flags.CopyTo(flagsBytes, 0)
-    (txs |> List.choose id, new MerkleBlock(block.Header, txHashes, flagsBytes))
+    (txs |> List.choose id, MerkleBlock(block.Header, txHashes, flagsBytes))
 
 (**
 ## The Peer implementation
@@ -438,7 +441,7 @@ and routes it to the appropriate queue.
             (peerQueues :> IPeerSend).Receive(message)
         | "getaddr" ->
             let now = Instant.FromDateTimeUtc(DateTime.UtcNow)
-            let addr = new Addr([|{ Timestamp = int32(now.ToUnixTimeTicks() / NodaConstants.TicksPerSecond); Address = NetworkAddr.MyAddress }|])
+            let addr = Addr([|{ Timestamp = int32(now.ToUnixTimeTicks() / NodaConstants.TicksPerSecond); Address = NetworkAddr.MyAddress }|])
             (peerQueues :> IPeerSend).Send(new BitcoinMessage("addr", addr.ToByteArray()))
         | "getdata" ->
             let gd = message.ParsePayload() :?> GetData
@@ -482,7 +485,7 @@ and routes it to the appropriate queue.
             relay <- 1uy
         | "filterload" ->
             let filterLoad = message.ParsePayload() :?> FilterLoad
-            let bf = new BloomFilter(filterLoad.Filter, filterLoad.NHash, filterLoad.NTweak)
+            let bf = BloomFilter(filterLoad.Filter, filterLoad.NHash, filterLoad.NTweak)
             bloomFilter <- Some(bf)
             relay <- 1uy
         | "filterclear" ->
@@ -646,6 +649,7 @@ an observable. The peer creates the observable and notifies Bob of its availabil
             logger2 "Closing" target
             trackerIncoming.OnNext(TrackerCommand.Close id)
             { data with CommandHandler = processClosing }
+        | _ -> failwith "processCommand - not sure what to do here"
 (**
 Finally, `processClosing` handles the cleanup. Tom will not send further requests to this peer but there still may be
 outstanding message in the pipeline. They must be cleared gracefully otherwise someone could end up waiting for their

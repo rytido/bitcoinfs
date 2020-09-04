@@ -39,7 +39,7 @@ let skipScript (script: byte[]) =
 let processUTXOFast (utxoAccessor: IUTXOAccessor) (height) (tx: Tx) (i: int) =
     tx.TxIns |> Seq.iteri (fun iTxIn txIn ->
         if i <> 0 then
-            let scriptRuntime = new ScriptRuntime(Script.computeTxHash tx iTxIn)
+            let scriptRuntime = ScriptRuntime(Script.computeTxHash tx iTxIn)
             utxoAccessor.GetUTXO txIn.PrevOutPoint |> Option.iter(fun txOut ->
                 let inScript = txIn.Script
                 let script = txOut.TxOut.Script
@@ -51,7 +51,7 @@ let processUTXOFast (utxoAccessor: IUTXOAccessor) (height) (tx: Tx) (i: int) =
                 )
         )
     tx.TxOuts |> Seq.iteri (fun iTxOut txOut ->
-        let outpoint = new OutPoint(tx.Hash, iTxOut)
+        let outpoint = OutPoint(tx.Hash, iTxOut)
         utxoAccessor.AddUTXO (outpoint, UTXO(txOut, 0))
         )
 
@@ -93,7 +93,7 @@ let writeBootstrap (firstBlock: int) (lastBlock: int) (stream: Stream) =
 
 (*** hide ***)
 let verifySingleTx (tx: Tx) (iTxIn: int) (outScript: byte[]) =
-    let scriptRuntime = new ScriptRuntime(Script.computeTxHash tx iTxIn)
+    let scriptRuntime = ScriptRuntime(Script.computeTxHash tx iTxIn)
     let txIn = tx.TxIns.[iTxIn]
     let inScript = txIn.Script
     scriptRuntime.Verify(inScript, outScript)
@@ -134,7 +134,7 @@ let writeBootstrapFile() =
     writeBootstrap 345001 348000 stream
 
 let addLocalNode() =
-    let myNode = new IPEndPoint(IPAddress.Loopback, 8333)
+    let myNode = IPEndPoint(IPAddress.Loopback, 8333)
     trackerIncoming.OnNext(TrackerCommand.Connect myNode)
 
 let runNode() =

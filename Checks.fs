@@ -93,7 +93,8 @@ let reward (height: int) =
     5000000000L / (1L <<< era)
 
 let maxHash = 1I <<< 256
-let getWork (fork: BlockHeader seq) = fork |> Seq.map (fun bh -> maxHash / target bh.Bits) |> Seq.sum
+// original: Seq.map (fun bh -> maxHash / target bh.Bits) |> Seq.sum
+let getWork (fork: BlockHeader seq) = fork |> Seq.sumBy (fun bh -> maxHash / target bh.Bits)
 
 // The coinbase follow a particular format
 let isCoinBase (tx: Tx) =
@@ -215,8 +216,7 @@ let checkBlockTxs (utxoAccessor: IUTXOAccessor) (block: Block) =
                 let outputScripts = tx.TxOuts |> Array.map (fun x -> x.Script)
                 [inputScripts; outputScripts]
                     |> Array.concat
-                    |> Seq.map (fun script -> scriptRuntime.CheckSigCount script)
-                    |> Seq.sum
+                    |> Seq.sumBy scriptRuntime.CheckSigCount
             ) |> Seq.sum
         logger2 "CheckSig count" checkSigOpsCount
         do! checkSigOpsCount <= maxCheckSigOpsCount |> errorIfFalse (sprintf "checkSig ops cannot occur more than %d times" maxCheckSigOpsCount)

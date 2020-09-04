@@ -210,7 +210,7 @@ let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: int) =
 
     if anyoneCanPay then // reduce to a single input
         writer.WriteVarInt(1)
-        let txIn2 = new TxIn(tx.TxIns.[index].PrevOutPoint, subScript, tx.TxIns.[index].Sequence)
+        let txIn2 = TxIn(tx.TxIns.[index].PrevOutPoint, subScript, tx.TxIns.[index].Sequence)
         writer.Write(txIn2.ToByteArray())
     else // otherwise keep the other inputs but blank their script
         writer.WriteVarInt(tx.TxIns.Length)
@@ -218,9 +218,9 @@ let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: int) =
             let script = if i = index then subScript else Array.empty
             let txIn2 =
                 if sigHashType <> 1uy && i <> index then
-                    new TxIn(txIn.PrevOutPoint, script, 0)
+                    TxIn(txIn.PrevOutPoint, script, 0)
                 else
-                    new TxIn(txIn.PrevOutPoint, script, txIn.Sequence)
+                    TxIn(txIn.PrevOutPoint, script, txIn.Sequence)
             writer.Write(txIn2.ToByteArray())
         )
 
@@ -239,7 +239,7 @@ let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: int) =
             writer.WriteVarInt (index+1)
             for i in 0..index do
                 if i < index then
-                    let txOut = new TxOut(-1L, Array.empty)
+                    let txOut = TxOut(-1L, Array.empty)
                     writer.Write(txOut.ToByteArray())
                 else
                     writer.Write(tx.TxOuts.[i].ToByteArray())
@@ -297,9 +297,9 @@ The interpreter takes a transaction hashing function at construction. When the f
 of the input matters and will not give the same hash.
 *)
 type ScriptRuntime(getTxHash: byte[] -> int -> byte[]) =
-    let evalStack = new ByteList()
-    let altStack = new ByteList()
-    let ifStack = new List<bool>()
+    let evalStack = ByteList()
+    let altStack = ByteList()
+    let ifStack = List<bool>()
     let mutable skipping = false
     let mutable codeSep = 0
 
@@ -448,7 +448,7 @@ before passing the script to the hashing function
             if codeSep <> 0
                 then script.[codeSep..]
                 else script
-        let (success, script, _) = removeData subScript (fun data -> signatures.Contains data)
+        let (success, script, _) = removeData subScript signatures.Contains
         if not success then fail()
         script
 
@@ -464,7 +464,7 @@ check in practice as every script must be checked even if the tx output is never
 *)
     let scriptCheckSigCount (script: byte[]) =
         let (_, ops, _) = removeData script (fun _ -> true)
-        ops.Prepend(0xFFuy).Window(2) |> Seq.map (fun x -> // Prepend a dummy byte to deal with boundary case
+        ops.Prepend(0xFFuy).Window(2) |> Seq.sumBy (fun x -> // Prepend a dummy byte to deal with boundary case
             match x.ToArray() with
             | [|op1; op2|] ->
                 match op2 with
@@ -475,7 +475,7 @@ check in practice as every script must be checked even if the tx output is never
                     else 20
                 | _ -> 0
             | _ -> 0
-            ) |> Seq.sum
+            )
 
 (**
 ### Single signature verification
