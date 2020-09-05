@@ -13,6 +13,7 @@ This is a fork of <https://github.com/bitcoinfs/bitcoinfs>
 
 ```bash
 sudo apt install sqlite3
+mkdir data
 cd data
 sqlite3 bitcoin.db
 ```
